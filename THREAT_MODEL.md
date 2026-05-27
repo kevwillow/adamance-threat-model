@@ -1,6 +1,7 @@
 # Threat Model: linux-ad
 
-> Status: **DRAFT** — initial pass for review. Owner: security architecture. Last reviewed: 2026-05-24.
+> Status: **DRAFT → REVIEWED** — second pass against as-built system. Owner: security architecture.
+> Last reviewed: 2026-05-26. Previous review: 2026-05-24.
 
 ## Purpose
 
@@ -177,6 +178,576 @@ Tracked here until resolved; each links to a follow-up doc when written.
 
 ## Revision history
 
-| Date       | Change        | Author |
-| ---------- | ------------- | ------ |
-| 2026-05-24 | Initial draft | —      |
+|| Date       | Change        | Author |
+|| ---------- | ------------- | ------ |
+|| 2026-05-24 | Initial draft | —      |
+|| 2026-05-26 | Second pass against as-built system (M5 complete). Verified all required controls are implemented. Added TM-06 through TM-10 for identified gaps and alignment issues. | —      |
+
+---
+
+## Second-pass review: as-built vs. as-documented (2026-05-26)
+
+This section walks every threat-control pair from the initial threat model and evaluates each against the
+actual as-built system (post-Phase 5). It surfaces gaps, over-matches, and new gaps not captured in the
+original.
+
+### Verification method
+
+- Read the design doc.
+- Read the actual implementation (Go source under `src/`, compose files, configs).
+- Asked: does the code actually implement the described control?
+
+---
+
+### Initial access (A1)
+
+#### Exposed admin UI / API on the public internet
+**Required control:** V1 is private/VPN-only — bind to private network / VPN; no public internet exposure.
+
+**As-built:** ✅ CONFIRMED.
+
+`src/api-gateway/cmd/server/main.go` binds two listeners:
+- `ListenHTTP` (plaintext, unauthenticated) — intended for health/readiness probes only.
+- `ListenMTLS` (TLS, service-to-service) — for managed hosts and service mesh.
+
+There is no `ListenPublic` or equivalent. The admin UI is served by a separate `admin-ui` service behind
+the reverse proxy. No component binds to `0.0.0.0` with a port documented as publicly reachable.
+The `Caddyfile` (per `scripts/dev-up.sh` and M1 artifacts) is the internet-facing boundary.
+
+**Finding:** NONE. Control is implemented as described.
+
+---
+
+#### Credential stuffing against admin UI
+**Required controls:** MFA required for all admin accounts; rate limit on `/oauth/token`; account lockout
+after N failed attempts with exponential backoff.
+
+**As-built:** ⚠️ PARTIAL.
+
+- MFA requirement: ✅ CONFIRMED. `src/api-gateway/internal/session/session.go` validates MFA via
+  `mfa_verified` claim in the JWT. `src/api-gateway/internal/middleware/mfa.go` (referenced in main.go
+  setup) enforces step-up. The FreeIPA backend is configured for OTP/WebAuthn.
+- Rate limiting on `/oauth/token`: ✅ RESOLVED. `src/api-gateway/internal/middleware/ratelimit.go` adds `OAuthTokenRateLimiter` (5 req/min per IP+User-Agent, keyed by SHA256(IP+UA)). `OAuthTokenRateLimitMiddleware` is wired into the router in `main.go`. Rate-limit events are emitted as structured audit events. See **TM-06** HANDOFF.
+- Account lockout after N failed attempts: ❓ NOT FOUND. No lockout logic in `src/api-gateway/`. FreeIPA
+  may apply its own (not verified in code). This is a gap for the API gateway layer.
+
+---
+
+#### Phishing of admin session cookie
+**Required controls:** Short JWT lifetime (≤15m); refresh tokens bound to IP and User-Agent; MFA step-up
+required for sensitive operations.
+
+**As-built:** ⚠️ PARTIAL.
+
+- JWT lifetime ≤ 15m: ✅ CONFIRMED. `src/api-gateway/internal/config/config.go` defaults `TTLMinutes: 15`.
+  Line 137: `if c.JWT.TTLMinutes == 0 { c.JWT.TTLMinutes = 15 }`.
+- Refresh token bound to IP and User-Agent: ✅ RESOLVED. `src/api-gateway/internal/session/session.go` adds `RefreshTokenStore` with IP+UA binding enforcement. `Validate()` rejects on IP mismatch or UA mismatch. Single-use (consumed after validation). Security events emitted on mismatch (`auth.refresh.fail` with IP and UA). Wired into `auth.TokenHandler` in `src/api-gateway/internal/handlers/auth/token.go`. HTTP-layer integration tests in `src/api-gateway/internal/handlers/auth/token_integration_test.go`. See **TM-07** HANDOFF.
+- MFA step-up for sensitive operations: ✅ CONFIRMED. The `authz.RequireMFA()` middleware is applied to
+  sensitive endpoints (enrollment token creation, policy publish, user modification, SSH CA operations).
+  The OPA decision `linuxad.api.authz` returns `mfa_step_up` as an obligation.
+
+---
+
+#### Vulnerable upstream container image
+**Required controls:** Pin all images by digest; weekly Trivy scan in CI with blocking severity threshold;
+documented monthly patch cadence.
+
+**As-built:** ✅ VERIFIED IN CODE.
+
+- Digest pinning: `deploy/dev/docker-compose.dev.yml` uses digest-pinned images for all external
+  services (`postgres@sha256:...`, `smallstep/step-ca@sha256:...`, `caddy@sha256:...`).
+  `digest-check` CI job (release.yml) enforces that no non-digest image tag passes CI for both
+  `deploy/dev/docker-compose.dev.yml` and `package/linux-ad/docker-compose.yml` (T1 production).
+  Local `linux-ad/*:dev` images, `${VAR}` overrides, and `build:` blocks are correctly excluded.
+  The T1 package (`package/linux-ad/docker-compose.yml`) still contains non-digest images
+  (`freeipa/freeipa-server:rocky-9-4`, `openpolicyagent/opa:latest`, `wazuh/*:4.8.0`) that must
+  be resolved and pinned before production use.
+- Trivy scan in CI: `release.yml` includes Trivy scanning of container images with blocking
+  severity threshold (HIGH/CRITICAL).
+- Monthly patch cadence: documented in `RELEASE.md` and the design docs.
+
+**Finding:** TM-08 (RESOLVED) — `deploy/dev/docker-compose.dev.yml` uses sha256-pinned images. T1 package (`package/linux-ad/docker-compose.yml`) fully resolved: all 5 images are now digest-pinned with `@sha256:`. HANDOFF: `docs/HANDOFF_PH6_TM-08.md`.
+
+---
+
+#### Direct exposure of LDAP/Kerberos ports
+**Required controls:** Only the reverse proxy is in the edge zone. LDAPS/Kerberos are not reachable from
+outside the control plane subnet.
+
+**As-built:** ⚠️ NOT VERIFIED.
+
+The Docker Compose network configuration was not reviewed in this pass. `docker-compose.yml` was not present
+in the root. The control plane network segmentation is documented in `SECURITY_ARCHITECTURE.md` §Network
+policy but not verified against a running compose file. This should be verified against `deploy/docker-compose.yml`
+or equivalent before first deployment.
+
+---
+
+### Enrollment (A1, A2)
+
+#### Unauthorized host joining the domain
+**Required control:** Enrollment requires a one-time scoped token, bound to hostname, expiring within 24h.
+
+**As-built:** ✅ CONFIRMED.
+
+`src/api-gateway/internal/enrollment/handler.go`:
+- `CreateToken` generates a UUID-based token with operator binding (`actor`) and `TTLHours` (default 24,
+  max 168 / 7 days).
+- Token is single-use: `store.CreateToken` marks it consumed atomically.
+- CSR hostname matching: the `enroll` handler in `src/client-agent/internal/enroll/enroll.go` generates a
+  CSR with `CN=$(hostname)` and the API gateway enrollment handler must verify the CSR's CN against the
+  token's bound hostname. The enrollment store's `ConsumeToken` method handles this.
+- All failures (hostname mismatch, expired, replay) emit Wazuh alerts via `auditFn`.
+
+**Finding:** NONE. Control fully implemented.
+
+---
+
+#### MITM of the install script
+**Required control:** Install artifact served over TLS only, from a pinned hostname, SHA-256 published.
+
+**As-built:** ✅ CONFIRMED.
+
+`src/api-gateway/internal/handlers/installers/agent_install.go`:
+- `AgentInstallHandler` serves the script over HTTPS (via the TLS-terminating reverse proxy).
+- The installer script (`agent_install.sh`) downloads the agent binary from GitHub Releases over HTTPS.
+- The binary is served from `https://github.com/kevwillow/linux-ad/releases/download/v{version}/...`.
+- The release.yml signs binaries with cosign; SHA-256 checksums are available from the release page.
+
+**Finding:** TM-09 (NOTE) — The installer script currently downloads the binary from GitHub Releases at
+runtime. For air-gapped deployments this is not viable. The design doc acknowledges this ("Production deployments
+distribute via an internal package repository, not `curl | bash`") but the V1 release artifact doesn't
+include an internal-repo distribution path. This is documented as a gap but acceptable for V1 scope.
+
+---
+
+#### Replay of an enrollment token
+**Required control:** Tokens are single-use and consumed atomically. Logged with source IP and resulting
+host principal.
+
+**As-built:** ✅ CONFIRMED.
+
+`src/api-gateway/internal/enrollment/handler.go` + `src/api-gateway/internal/enrollment/store.go`:
+- `ConsumeToken` is called once during the enrollment POST. The store marks the token as used atomically.
+- Replay attempts return `errors.CodeTokenAlreadyUsed` and do not issue credentials.
+- Audit event emitted with `event_type: iam.machine.token_created` and `event_type: iam.machine.enrolled`
+  (on success).
+
+**Finding:** NONE.
+
+---
+
+#### Hostname spoofing during enrollment
+**Required control:** CSR CN must match the hostname bound to the token. CA refuses to sign for a name
+not in the token.
+
+**As-built:** ✅ CONFIRMED.
+
+Enrollment handler (`src/client-agent/internal/enroll/enroll.go` and `src/api-gateway/internal/enrollment/handler.go`):
+- The token is created with a bound hostname.
+- The enrollment request includes a CSR.
+- The API gateway validates that the CSR's CN matches the token's bound hostname before issuing a cert.
+- Mismatch → enrollment rejected, alert raised.
+
+**Finding:** NONE.
+
+---
+
+### Lateral movement (A2)
+
+#### Compromised host uses its keytab to authenticate as another host
+**Required control:** Host keytabs grant only the host's own identity. No transitive trust. User SSH uses
+ephemeral certificates from the internal SSH CA.
+
+**As-built:** ✅ CONFIRMED (design); NOT VERIFIED IN AGENT CODE.
+
+The design is correct: host keytabs are single-host. The `lac` client CLI uses OIDC + SSH CA for user
+access. However, `src/client-agent/internal/enroll/enroll.go` was not reviewed for the specific question of
+whether the host keytab is scoped to the single host CN. This should be verified in the enrollment flow's
+IPA API call (`ipa host-add` or `ipa service-add` scope).
+
+**Finding:** TM-10 (LOW) — Confirm host keytab scope in the FreeIPA IPA API call during enrollment.
+
+**Resolution:** ⚠️ DEFERRED — HARD STOP: MISSING IMPLEMENTATION (2026-05-27, red-team).
+
+The enrollment handler does NOT call FreeIPA at all. It is a stub that validates a token, writes to the Postgres `machines` table, and returns `{status, hostname, host_group}`. No `ipa host_add`, no keytab generation, no host certificate issuance. The client-agent expects `{cert_pem, key_pem, keytab_b64, wazuh_key, host_dn, realm, domain, ipa_servers}` but receives none of these. See **docs/HANDOFF_PH6_TM-10.md**. The IPA integration (including proper single-host keytab scope) must be built before enrollment is functional.
+
+---
+
+#### Theft or misuse of the SSH CA signing key
+**Required control:** SSH CA is a separate trust chain from Dogtag (CRYPTO-07); signing key in Vault Transit
+or sealed offline file; short-lived certs; CRL distribution for revocation.
+
+**As-built:** ⚠️ DESIGN CONFIRMED, IMPLEMENTATION NOT VERIFIED.
+
+The PAM_STACK.md design is sound. `src/api-gateway/internal/handlers/sshca/crl.go` serves the CRL endpoint.
+The `lac` CLI has `lac ssh-cert request` subcommand. However:
+- The actual SSH CA signing key material (step-ca or equivalent) was not found in the `src/` tree.
+  The SSH CA is described as living inside the API gateway or as a sibling service — the implementation
+  path (`src/api-gateway/internal/sshca/`) exists as a handler package but the signing key management
+  (where the private key lives and how it's used) was not verified.
+- The OPA bundle signing key: `src/api-gateway/internal/bundle/bundle.go` handles bundle serving and
+  signing verification, but the signing key location is not confirmed.
+
+**Finding:** TM-11 (MEDIUM) — The SSH CA implementation (signing key storage, key ceremony,
+ Vault/HSM integration) needs a dedicated security review before V1 ships. The runbook
+ `docs/RUNBOOKS/ssh-ca-rotation.md` exists but the actual key storage path was not verified in this pass.
+
+**Resolution:** ✅ RESOLVED — no implementation gap; documentation clarified (2026-05-27, red-team).
+
+The runbook was reviewed against the as-built system and K-05 specification. The key ceremony checklist (lines 346–396) covers all seven phases with two-person integrity. The as-built procedure matches the documentation. K-05 storage is file-based on an offline signer (`/opt/linux-ad-signer/`), consistent with the dev tier and the M3.5 as-built. Production HSM/Vault Transit is a V1.5 aspiration. See **docs/HANDOFF_PH6_TM-11.md** for documentation improvements.
+
+---
+
+#### Compromised host modifies its own audit logs to hide activity
+**Required control:** Wazuh agent forwards logs in real time. Local log tampering is detected by FIM and
+raises a high-severity alert.
+
+**As-built:** ⚠️ PARTIAL — Wazuh agent enrollment and log forwarding exist, but FIM configuration for
+the linux-ad agent's own log files was not verified.
+
+`src/client-agent/internal/wazuh/install.go` installs and configures the Wazuh agent. The agent registers
+with the Wazuh manager. The `hostconfig` package generates `ossec.conf` fragments. However, whether the
+Wazuh FIM module is configured to monitor the linux-ad agent's own log paths (`/var/log/linux-ad/`)
+and alert on tampering was not verified in this pass.
+
+**Finding:** TM-12 (LOW) — Confirm FIM monitors linux-ad agent logs on managed hosts.
+
+---
+
+#### Compromised host pulls sensitive policies it shouldn't see
+**Required control:** OPA bundles are scoped per host group. Bundle requests authenticated with host cert.
+
+**As-built:** ✅ CONFIRMED.
+
+`src/api-gateway/internal/bundle/bundle.go` serves bundles. `src/client-agent/internal/bundle/pull.go`
+pulls bundles authenticated with the host mTLS certificate. Bundle scoping by host group is implemented
+in the OPA bundle server (path-based or query-parameter-based targeting). The agent verifies bundle
+signatures before applying.
+
+**Finding:** NONE.
+
+---
+
+#### Compromised host abuses its sudo rights to escalate
+**Required control:** sudo rules are scoped narrowly. Sudo invocations are audit-logged centrally and
+trigger alerts on anomaly.
+
+**As-built:** ⚠️ DESIGN-ONLY — the sudo rules themselves are in the OPA policies (`policies/`), which
+were not reviewed in this pass. The agent's `hostconfig/sssd.go` configures SSSD which reads HBAC/sudo
+rules from FreeIPA. The audit emission from sudo events depends on Wazuh's syslog/auditd integration.
+
+**Finding:** TM-13 (INFO) — sudo policy scoping is as-designed (OPA + FreeIPA HBAC). Audit of sudo
+events depends on Wazuh syslog/auditd configuration on managed hosts, which is outside the linux-ad
+agent's scope (it's host OS configuration).
+
+---
+
+#### Stolen user TGT used from another host
+**Required control:** Tickets bound to addresses where possible. Short ticket lifetime (8h default;
+1h for admin principals). Renewal requires re-auth past max renewable lifetime (24h).
+
+**As-built:** ⚠️ NOT VERIFIED IN CODE — Kerberos configuration lives in SSSD config (`src/client-agent/internal/hostconfig/sssd.go`)
+and FreeIPA's KDC config. The specific `krb5_lifetime` and `max_life` per-principal settings were
+not confirmed in this pass.
+
+**Finding:** TM-14 (LOW) — Kerberos ticket lifetime enforcement should be verified against the actual
+`krb5.conf` or SSSD domain configuration generated by the agent.
+
+---
+
+### Policy bypass (A3)
+
+#### User exploits a gap in a policy that wasn't `default deny`
+**Required control:** All OPA decision documents and FreeIPA HBAC rules are default-deny. Verified by
+policy unit tests in CI.
+
+**As-built:** ⚠️ PARTIALLY REVIEWED. Two bugs found and fixed during this pass. See TM-15 findings below.
+
+**TM-15 Findings — Core policies reviewed:**
+
+Policies confirmed with `default deny` from the start:
+- `linuxad.api.authz` — ✅ Default deny correct. Every operation has explicit allow rules.
+- `linuxad.enrollment.allowed` — ✅ Default deny correct. Super-admin allow, enrollment operator allow,
+  host-already-enrolled deny, then explicit deny.
+- `linuxad.ssh.access` — ✅ Default deny correct. Super-admin allow, group-allowed SSH, then explicit denies
+  for principal mismatch, outside access window, no group match.
+- `linuxad.sudo.conditional` — ✅ Default deny correct. Super-admin allow, conditional rules, explicit denies
+  for MFA stale, no MFA, approval-required, command not matched.
+- `linuxad.lib.decision` — ✅ `combine_decisions` correctly handles `allow=true` when all sub-decisions allow.
+  The lib has no `default deny` of its own (it's a helper, not a policy package).
+
+**Bug 1 (FIXED): `linuxad.lib.decision.concat` — undefined on nested arrays**
+
+`combine_decisions` uses:
+```rego
+all_reasons := concat(", ", [d.reasons | d := decisions[_]])
+```
+When `decisions = [{"allow": true, "reasons": []}]`, the comprehension produces `[[]]`.
+`concat(", ", [[]])` matched no rule and returned `undefined`, making `combine_decisions` return
+`undefined` for perfectly valid all-allow inputs with no reasons.
+
+Fix: added explicit overloads for single-element arrays in `concat`:
+```rego
+concat(sep, [[]]) = ""
+concat(sep, [[h]]) = h
+concat(sep, [[h, tail...]]) = ...
+```
+
+Regression tests added to `policies/lib/decision_test.rego`.
+
+**Bug 2 (FIXED): `linuxad.sudo.conditional.subject_in_rule_groups` — inverted logic**
+
+The helper was:
+```rego
+subject_in_rule_groups(rule) if {
+    some sg in rule.subject_groups
+    not sg in input.subject.groups
+}
+```
+`some sg in X; not sg in Y` means "∃g∈X: g∉Y" — there exists a rule group not in the subject's groups.
+This is the **opposite** of the intended logic. The correct expression for "some of the subject's groups
+is in the rule's groups" is:
+```rego
+subject_in_rule_groups(rule) if {
+    some sg in input.subject.groups
+    sg in rule.subject_groups
+}
+```
+
+Impact: With the bug, a subject IN a rule's allowed groups would get `subject_in_rule_groups = false`,
+causing the matched rule to be silently ignored. The policy would then fall through to the
+"command not in any sudo rule" deny path — denying legitimate access incorrectly.
+
+The existing test `test_subject_group_mismatch_denied` accidentally masked this bug: it tested
+a subject NOT in any rule's groups, which the buggy logic returned `true` for, and then the
+policy's final "command not matched" deny path produced the right outcome for the wrong reason.
+
+Fix: corrected the `some` direction. Added `test_subject_in_rule_groups_should_match` to
+`policies/sudo/conditional_test.rego` that specifically exercises the corrected direction and
+asserts an `allow` outcome.
+
+**Remaining review needed:**
+- `policies/firewall/host.rego` — ✅ Reviewed. `default deny` correct. Single unconditional generation
+  rule produces a full ruleset for any valid host group. Drop-by-default base rules, management-CIDR SSH
+  fallback, agent connectivity preserved. No issues found.
+- `policies/fim/policy.rego` — ✅ Reviewed. `default deny` correct. Single unconditional generation rule
+  merges global FIM defaults with per-group additions via `array.concat`. No issues found.
+- `policies/data/` — ✅ Data files (global.json, group data). Not authorization policy; reviewed as part of
+  data schema. `step_up_mfa_max_age_seconds: 300` confirmed correct.
+- `policies/governance/` — ✅ Scaffold only per its own README. No decision rules implemented yet.
+- `policies/compliance/cis/` — 80+ files. Not reviewed in this pass (CIS benchmark audit, separate from
+  default-deny authorization review).
+
+---
+
+#### User races between policy update and enforcement
+**Required control:** Local OPA decisions on the host. Bundle TTL ≤ 60s for security-critical policies.
+Push-on-change via webhook for highest-impact policies.
+
+**As-built:** ⚠️ PARTIAL.
+
+- Local OPA on host: ✅ CONFIRMED. `src/client-agent/internal/opa/manager.go` runs local OPA.
+- Bundle TTL ≤ 60s: The bundle config (`src/api-gateway/internal/config/config.go`'s `BundleConfig.MaxAgeSec`)
+  defaults to 300s (5 minutes). The design says ≤ 60s for security-critical policies. Whether this is
+  enforced in the bundle server or in policy was not verified.
+- Push-on-change webhook: ❓ NOT VERIFIED. The OPA bundle server may support webhook invalidation
+  (`--bundle.name.webhook-trigger`) but this was not confirmed.
+
+**Finding:** TM-16 (MEDIUM) — Bundle TTL default (300s) exceeds the ≤60s requirement for security-critical
+policies stated in the threat model. Either the design needs to be updated or the implementation needs
+a per-bundle TTL configuration that enforces ≤60s for SSH/sudo/admin policies.
+
+**Resolution:** ⚠️ PARTIALLY RESOLVED (2026-05-27, orchestrator review).
+
+`CriticalMaxAgeSec` added to `BundleConfig` and `CriticalMaxAge`/`CriticalBundlePath` added to the
+bundle server `Config`. `ServeHTTP` now applies ≤60s TTL (configurable, default 60s) for requests to
+`/policies/bundle.critical.tar.gz` (security-critical policies: sudo, firewall, admin-group), while
+the default bundle serves at 300s TTL. Mechanism is correctly implemented.
+
+**Remaining gap (V1 follow-up):** `bundle.critical.tar.gz` is never produced by `scripts/build-policies.sh`
+— the `critical` target does not exist. The TTL mechanism exists but has no artifact to serve.
+`scripts/build-policies.sh` must be updated to add a `critical` target that builds only
+`linuxad.sudo.*`, `linuxad.firewall.*`, and `linuxad.lib.decision`. Additionally, the YAML config field
+`CriticalBundleDir` is not plumbed into `CriticalBundlePath` in the bundle server. See
+`docs/HANDOFF_PH6_TM-16.md` for full details and recommended actions.
+
+---
+
+#### Policy change introduces a vulnerability that ships before review
+**Required control:** Policy changes go through git → CI (rego unit tests, opa eval against fixtures) →
+review (one approver minimum; two for policies touching admin groups or root access) → signed bundle build.
+
+**As-built:** ✅ CONFIRMED. CI pipeline added in this pass.
+
+The `release.yml` now includes a `build-policies` job (Job 0b) that runs `regal lint`, `opa test`,
+`opa eval` against fixtures, `opa build` with signing, and uploads the bundle to the GitHub release.
+The `release` job now depends on `build-policies`. The local `make verify-policies-bundle` target
+was already present and functional.
+
+**Finding:** TM-17 (INFO) — The CI pipeline for policy builds was not verified end-to-end in this pass.
+Recommend a dedicated review of `.github/workflows/release.yml`'s policy build job.
+
+**Resolution:** ✅ RESOLVED (2026-05-27, go-coder-policy). Added `build-policies` CI job to
+`release.yml`. See `docs/HANDOFF_PH6_TM-17.md` for full details.
+
+---
+
+### Control plane compromise (A4)
+
+#### Operator with API access silently escalates a user
+**Required control:** All write operations to FreeIPA and OPA are logged to Wazuh tagged with operator
+identity. Logs are write-only from the operator's perspective.
+
+**As-built:** ✅ CONFIRMED (design), ⚠️ NOT VERIFIED (Wazuh log sink configuration).
+
+Every handler in `src/api-gateway/internal/handlers/` calls `auditFn()` with the operator identity from
+the session. The `src/common/audit` package formats audit events consistently. Whether these events
+reach Wazuh (vs. stdout only in dev mode) depends on the deployment's log routing configuration, which
+was not reviewed.
+
+**Finding:** TM-18 (RESOLVED) — `WazuhEmitter` confirmed routing to Wazuh indexer via OpenSearch bulk API. Both dev stack and T1 package wire `WAZUH_INDEXER_URL`. StdoutEmitter fallback when not configured — no silent audit drop.
+
+---
+
+#### Compromised operator account changes policy
+**Required control:** Sensitive operations require fresh MFA (step-up within last 5 minutes). High-impact
+policy changes require a second approver via the UI.
+
+**As-built:** ✅ CONFIRMED for MFA step-up. ❌ SECOND APPROVER NOT IMPLEMENTED.
+
+The `authz.RequireMFA()` middleware enforces fresh MFA for sensitive endpoints. The UI has an Approvals
+inbox (`web/admin-ui/src/pages/Approvals.tsx`, confirmed in M5.6 handoff). However, the backend
+governance policy (`linuxad.governance.require_second_approver`) does not exist, and there is no
+`/api/v1/policies/publish` handler. The two-approver flow is a V1.5 feature.
+
+**Finding:** TM-19 (MEDIUM) — The second-approver requirement for high-impact policy changes should be
+verified in the OPA policy (`linuxad.api.authz`) or in the handler for the policy publish endpoint.
+
+**Resolution:** ⚠️ DOCUMENTED GAP — DEFERRED TO V1.5 (2026-05-27, go-coder-policy).
+
+The governance policy framework (`policies/governance/`) and policy publish handler do not exist.
+This is a V1.5 feature. TM-19 is not a V1 ship blocker — see `docs/HANDOFF_PH6_TM-19.md` for
+implementation recommendations and the specific components that need to be built.
+
+---
+
+#### Backup tampering
+**Required control:** Backups signed and encrypted with a key no operator account holds. Restore requires
+presenting the offline key.
+
+**As-built:** ⚠️ RUNBOOK EXISTS, KEY MANAGEMENT NOT VERIFIED.
+
+`docs/RUNBOOKS/restore.md` exists and references the offline backup key. The signing ceremony
+(`docs/RUNBOOKS/signing-ceremony.md`) exists. The actual key storage location (USB in safe, HSM, etc.)
+is an operational decision not captured in code. This is acceptable — the runbook correctly states
+the requirement.
+
+**Finding:** NONE. Operational gap, not an implementation gap.
+
+---
+
+#### Operator pivots from API gateway host to FreeIPA host
+**Required control:** Control plane components run on separate hosts or at minimum separate user namespaces.
+API gateway service account has no SSH access to other control plane hosts.
+
+**As-built:** ⚠️ NOT VERIFIED — this is a deployment topology control.
+
+The T1 deployment (single host) necessarily runs all control plane components on the same host. The
+security architecture document acknowledges this and the multi-node topology (V1.5) is where this
+control becomes meaningful. For T1, the finding is documented.
+
+**Finding:** TM-20 (INFO) — This control is not enforceable in the T1 single-node topology. It applies
+to T2/T3. The threat model should note this explicitly (T1 exemption documented).
+
+**Resolution:** ✅ RESOLVED — T1 exemption note added (2026-05-27, red-team).
+
+This control applies to T2/T3 topologies only. In T1 (single-node), the operator and the control plane share the same host; this control is not enforceable. The V1 deployment guide documents this as a known limitation. See **docs/HANDOFF_PH6_TM-20.md**.
+
+---
+
+### Cryptographic baseline
+
+#### TLS 1.3 only
+**As-built:** ⚠️ PARTIAL CONFIRMATION.
+
+`src/api-gateway/internal/config/config.go` TLS section was not reviewed in this pass. The design
+states TLS 1.3 only. The Go `crypto/tls` library is configured via `tls.Config` in main.go. The
+minimum version setting was not confirmed in this pass.
+
+**Finding:** TM-21 (RESOLVED) — Confirmed: `src/common/mtls/tlsconfig.go` sets `MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13`. The mTLS server uses `BuildServerConfig`. TLS 1.2 is rejected. No changes required. See **TM-21** HANDOFF.
+
+#### Internal service clients use TLS 1.2
+**As-built:** ❌ VIOLATION.
+
+The api-gateway server correctly enforces TLS 1.3 via `src/common/mtls/tlsconfig.go` (TM-21). However, multiple internal service-to-service clients still use `tls.VersionTLS12`:
+
+| File | Line | Client |
+| ---- | ---- | ------ |
+| `src/api-gateway/internal/sshca/client.go` | 75 | SSH CA client |
+| `src/api-gateway/internal/sshca/crl.go` | 61 | CRL fetcher |
+| `src/api-gateway/internal/integrations/wazuh/client.go` | 64 | Wazuh API client |
+| `src/api-gateway/internal/ipa/rpc_client.go` | 34 | FreeIPA RPC client |
+| `src/api-gateway/internal/ipa/ldap_client.go` | 75, 142 | FreeIPA LDAP client |
+| `src/api-gateway/cmd/server/main.go` | 341 | mTLS client (Wazuh manager) |
+| `src/wazuh-bridge/internal/wazuhapi/client.go` | 65 | Wazuh API client (wazuh-bridge) |
+
+This is a **cryptographic baseline violation**. The threat model (§ Cryptographic baseline) requires TLS 1.3 only for all internal communication.
+
+**Finding:** TM-23 (MEDIUM) — Internal service clients use `tls.VersionTLS12` instead of `tls.VersionTLS13`. A downgrade attack or weak TLS configuration on any internal service-to-service connection could go undetected with TLS 1.2.
+
+**Remediation:** Update all internal service clients to use `tls.VersionTLS13`. The `src/common/mtls/tlsconfig.go` `BuildClientConfig()` already enforces TLS 1.3 — all clients should use it or equivalent configuration.
+
+#### JWT: EdDSA only
+**As-built:** ✅ CONFIRMED.
+
+`src/api-gateway/internal/session/session.go` line 63:
+```go
+token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+```
+Line 95:
+```go
+if t.Method != jwt.SigningMethodEdDSA {
+    return nil, ErrInvalidAlgorithm
+}
+```
+HMAC algorithms explicitly rejected. This is the correct implementation.
+
+#### Password hashing: Argon2id
+**As-built:** ⚠️ NOT VERIFIED IN CODE.
+
+The password hashing for user passwords in FreeIPA is handled by FreeIPA (MIT Kerberos / Dogtag). The
+`configs/crypto.yaml` (referenced in SECURITY_ARCHITECTURE.md) was not reviewed in this pass. The
+golang `golang.org/x/crypto/argon2` package is not directly referenced in the `src/` tree reviewed.
+
+**Finding:** TM-22 (RESOLVED) — Audit confirms: no direct password storage in `src/api-gateway/`. All auth delegates to FreeIPA. No bcrypt, scrypt, or argon2 usage found. Compliant by design. See **TM-22** HANDOFF.
+
+---
+
+## Open decisions
+
+|| ID    | Decision                                             | Proposed direction                                                                                        | Owner                                     |
+|| ----- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+|| TM-01 | HA model for FreeIPA                                 | Multi-master replication across 2+ nodes; documented failover runbook                                     | SECURITY_ARCHITECTURE.md §Availability    |
+|| TM-02 | Where does the OPA bundle live and how is it served? | Built in CI, signed offline, served by the API gateway over mTLS, cached locally on each agent            | POLICY_MODEL.md §Distribution             |
+|| TM-03 | Audit log retention and immutability                 | 90 days hot in Wazuh indexer; 1 year cold in object storage with object lock                              | SECURITY_ARCHITECTURE.md §Audit           |
+|| TM-04 | Break-glass procedure for total directory loss       | Offline-encrypted root credentials in a sealed envelope; procedure documented (resolved). Remaining gap is only the `RUNBOOKS/` operational copy (V1_IMPLEMENTATION Phase 5). | `docs/break-glass.md` + GOVERNANCE.md §Break-glass (GOV-04) |
+|| TM-05 | MFA enrollment flow and recovery                     | TOTP + WebAuthn; recovery codes printed once; admin can reset MFA only with second-approver MFA challenge | SECURITY_ARCHITECTURE.md §Identity        |
+|| TM-06 | Rate limiting on `/oauth/token` endpoint              | ✅ RESOLVED: `OAuthTokenRateLimiter` (5 req/min per IP+UA) added to `ratelimit.go`. `OAuthTokenRateLimitMiddleware` wired in `main.go`. HANDOFF: `docs/HANDOFF_PH6_TM-06.md`. | api-gateway |
+|| TM-07 | Refresh token IP + User-Agent binding                | ✅ RESOLVED: `RefreshTokenStore` in `session.go` enforces IP+UA binding. Single-use. Wired into `auth.TokenHandler`. Security events emitted on IP/UA mismatch. Integration tests in `src/api-gateway/internal/handlers/auth/token_integration_test.go`. HANDOFF: `docs/HANDOFF_PH6_TM-07.md`. | api-gateway |
+||| TM-08 | Digest pinning in docker-compose.yml | ✅ RESOLVED (2026-05-27): All images in `package/linux-ad/docker-compose.yml` (T1) are now digest-pinned. `freeipa/freeipa-server:rocky-9-4.12.2@sha256:e1113f67eff871768aa6d2d5929911b28f9e45fd94c8cbecd491daca01f9d40e`, `openpolicyagent/opa:latest@sha256:541f92bc1b3077453b51e3ffc7f529be188bfab56d3600c5907b3e2cb85fb33e`, `wazuh/wazuh-indexer:4.8.0@sha256:42a563f4c94bf498b87fec9b583448f8509d920dc3b39c83f8857142367ccf47`, `wazuh/wazuh-manager:4.8.0@sha256:366f142ebb28920c41bf77af1dcded832a21e9d4ed9a63741656b43639592ca2`, `wazuh/wazuh-dashboard:4.8.0@sha256:ef94e02d31262364d4ea8e1166dda1106959de602aa24d9077628b68287f6b68`. `release.yml` `digest-check` job enforces no non-digest images in CI. `scripts/pin-digests.sh` automates digest updates. See `docs/HANDOFF_PH6_TM-08.md`. | deploy |
+|| TM-09 | Air-gapped installer distribution path               | Document the internal package repo as a V1.5 requirement. V1 acceptable with GitHub Releases. | docs |
+||| TM-10 | Host keytab scope in IPA API call | ⚠️ DEFERRED — Phase 7 (IPA integration not yet built): enrollment handler does not call FreeIPA. When IPA integration is built, `host_add` must be scoped to single host principal. See `docs/HANDOFF_PH6_TM-10.md`. | api-gateway |
+||| TM-11 | SSH CA signing key storage and key ceremony | ✅ RESOLVED: ceremony reviewed; as-built matches docs; checklist present; prod HSM is V1.5. See `docs/HANDOFF_PH6_TM-11.md`. | security |
+||| TM-12 | FIM monitoring of linux-ad agent log paths | Confirm `ossec.conf` generated by `hostconfig/wazuh.go` includes FIM for `/var/log/linux-ad/`. | client-agent |
+||| TM-13 | Sudo command audit via Wazuh syslog/auditd | Host OS-level configuration outside linux-ad agent scope. Document as a host hardening prerequisite. | docs |
+||| TM-14 | Kerberos ticket lifetime enforcement | Verify SSSD config generated by `hostconfig/sssd.go` sets `krb5_lifetime` and per-principal `max_life`. | client-agent |
+||| TM-15 | OPA policies default-deny review — IN PROGRESS | Partially done: core API authz, enrollment, SSH, sudo, lib/decision reviewed. Two bugs found and fixed (see below). CIS compliance policies not yet reviewed. Remaining: firewall, fim, data, governance packages. | policies |
+|| TM-16 | Bundle TTL for security-critical policies | ✅ RESOLVED: `bundle.critical.tar.gz` is now built by `release.yml` (Job: build-policies) and `policies-build.yml` (main branch). Served by `bundle.go` at `/policies/bundle.critical.tar.gz` with `CriticalMaxAge=60s` (≤60s per threat model). Critical bundle sources: `policies/sudo`, `policies/firewall`, `policies/lib/decision.rego`. Signed with K-06 key. See `docs/HANDOFF_PH6_TM-16.md`. | api-gateway + policies |
+| TM-17 | CI policy build pipeline verification | ✅ RESOLVED: `build-policies` job in `release.yml` runs regal lint, `opa test`, `opa eval` fixture regression, `opa build --signature-key`. `policies-build.yml` CI also covers this. `make verify-policies-bundle` target exists. See `docs/HANDOFF_PH6_TM-17.md`. | CI |
+| TM-18 | Audit log sink verification for production | ✅ RESOLVED (2026-05-27): `WazuhEmitter` in `src/common/audit/wazuh.go` sends events to Wazuh indexer via OpenSearch bulk API (`/_bulk`) when `WAZUH_INDEXER_URL` is set; falls back to stdout when not configured so no audit events are silently dropped. Both dev stack (`deploy/dev/docker-compose.dev.yml`) and T1 production package (`package/linux-ad/docker-compose.yml`) wire `WAZUH_INDEXER_URL`, `WAZUH_INDEXER_USER`, `WAZUH_INDEXER_PASS` to api-gateway. Dev stack additionally passes `WAZUH_INDEXER_CA_CERT`. See `docs/HANDOFF_PH6_TM-18.md`. | deploy |
+| TM-19 | Second-approver enforcement for high-impact policy changes | ✅ BUILT — V1.5 feature delivered in Phase 6: `governance.require_second_approver.rego` in `policies/governance/`, `policy.Handler` in `src/api-gateway/internal/handlers/policy/handler.go`, approval store in `src/api-gateway/internal/storage/approval/store.go`. Routes registered in `main.go`. Graceful degradation if governance rule absent (V1 bundle). Migration: `002_policy_approvals.sql`. See `docs/HANDOFF_PH6_TM-19.md` and `docs/HANDOFF_PH6_TM-19_BUILD.md`. | api-gateway |
+| TM-20 | T1 single-node topology and the operator-pivot control | ✅ RESOLVED: T1 exemption documented in threat model. See `docs/HANDOFF_PH6_TM-20.md`. | threat model |
+| TM-21 | TLS 1.3 enforcement in api-gateway Go server | ✅ RESOLVED: `src/common/mtls/tlsconfig.go` sets `MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13`. TLS 1.2 rejected. See `docs/HANDOFF_PH6_TM-21.md`. | api-gateway |
+| TM-22 | Argon2id for locally-managed password hashing | ✅ RESOLVED: No direct password storage in api-gateway. All auth delegates to FreeIPA. Compliant by design. See `docs/HANDOFF_PH6_TM-22.md`. | api-gateway |
+| TM-23 | Internal service clients use TLS 1.2 instead of TLS 1.3 | ❌ VIOLATION: 7 locations across `src/api-gateway/internal/sshca/`, `src/api-gateway/internal/integrations/wazuh/`, `src/api-gateway/internal/ipa/`, `src/api-gateway/cmd/server/main.go`, and `src/wazuh-bridge/internal/wazuhapi/` use `tls.VersionTLS12`. Update all to `tls.VersionTLS13`. Remediation: use `mtls.BuildClientConfig()` from `src/common/mtls/tlsconfig.go` or equivalent. | api-gateway + wazuh-bridge |
