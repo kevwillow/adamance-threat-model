@@ -1,11 +1,11 @@
-# Threat Model: linux-ad
+# Threat Model: Lynadir
 
 > Status: **DRAFT → REVIEWED** — second pass against as-built system. Owner: security architecture.
 > Last reviewed: 2026-05-26. Previous review: 2026-05-24.
 
 ## Purpose
 
-This document defines **what linux-ad defends against and why.** Every security decision elsewhere in the project should
+This document defines **what Lynadir defends against and why.** Every security decision elsewhere in the project should
 trace back to a threat described here. If a control doesn't address a documented threat, it's probably ceremony. If a
 threat has no control, it's a gap and must be tracked.
 
@@ -16,7 +16,7 @@ or the UI that contradicts this document is a bug.
 
 **In scope:**
 
-- The linux-ad control plane (FreeIPA, OPA, Wazuh, API gateway, admin UI)
+- The Lynadir control plane (FreeIPA, OPA, Wazuh, API gateway, admin UI)
 - The client agent and its trust relationship with the control plane
 - User authentication and session flows
 - Host enrollment and lifecycle (join, rekey, decommission)
@@ -59,7 +59,7 @@ Ranked by blast radius if compromised:
 | API gateway                   | Postgres                    | Intra-control-plane        | DB credential (Vault-issued)      | TLS (local socket in T1) |
 | Managed host (SSSD)           | FreeIPA                     | Untrusted ↔ control plane  | Host keytab                       | Kerberos / LDAPS        |
 | Managed host (Wazuh agent)    | Wazuh manager               | Untrusted ↔ control plane  | Pre-shared agent key, mutual auth | Wazuh proto (encrypted) |
-| Managed host (linux-ad agent) | OPA bundle endpoint         | Untrusted ↔ control plane  | Signed bundles + mTLS host cert   | HTTPS                   |
+| Managed host (Lynadir agent) | OPA bundle endpoint         | Untrusted ↔ control plane  | Signed bundles + mTLS host cert   | HTTPS                   |
 | Operator workstation          | Control plane (break-glass) | Privileged ↔ control plane | Hardware token + audited bastion  | SSH over WireGuard      |
 
 ## Adversaries
@@ -149,7 +149,7 @@ These are non-negotiable defaults; deviation requires explicit documentation:
 - TLS: 1.3 only. No 1.2 fallback. Cipher suites limited to AEAD (AES-GCM, ChaCha20-Poly1305).
 - Kerberos: AES-256 only. RC4 and single-DES disabled in `kdc.conf`.
 - JWT: EdDSA (Ed25519) only. HMAC algorithms (`HS256` etc.) disabled at validation time.
-- Password hashing inside any linux-ad-owned component: Argon2id with parameters reviewed annually.
+- Password hashing inside any lynadir-owned component: Argon2id with parameters reviewed annually.
 - Long-lived signing keys (Dogtag CA, SSH CA / step-ca (K-05), JWT, OPA bundle) live in HSM-backed storage where
   available; for homelab deployments, sealed offline files with documented rotation. The X.509 (Dogtag) and SSH
   (step-ca) CA chains are kept separate per CRYPTO-07.
@@ -244,7 +244,7 @@ required for sensitive operations.
 - Refresh token bound to IP and User-Agent: ✅ RESOLVED. `src/api-gateway/internal/session/session.go` adds `RefreshTokenStore` with IP+UA binding enforcement. `Validate()` rejects on IP mismatch or UA mismatch. Single-use (consumed after validation). Security events emitted on mismatch (`auth.refresh.fail` with IP and UA). Wired into `auth.TokenHandler` in `src/api-gateway/internal/handlers/auth/token.go`. HTTP-layer integration tests in `src/api-gateway/internal/handlers/auth/token_integration_test.go`. See **TM-07** HANDOFF.
 - MFA step-up for sensitive operations: ✅ CONFIRMED. The `authz.RequireMFA()` middleware is applied to
   sensitive endpoints (enrollment token creation, policy publish, user modification, SSH CA operations).
-  The OPA decision `linuxad.api.authz` returns `mfa_step_up` as an obligation.
+  The OPA decision `lynadir.api.authz` returns `mfa_step_up` as an obligation.
 
 ---
 
@@ -257,16 +257,16 @@ documented monthly patch cadence.
 - Digest pinning: `deploy/dev/docker-compose.dev.yml` uses digest-pinned images for all external
   services (`postgres@sha256:...`, `smallstep/step-ca@sha256:...`, `caddy@sha256:...`).
   `digest-check` CI job (release.yml) enforces that no non-digest image tag passes CI for both
-  `deploy/dev/docker-compose.dev.yml` and `package/linux-ad/docker-compose.yml` (T1 production).
-  Local `linux-ad/*:dev` images, `${VAR}` overrides, and `build:` blocks are correctly excluded.
-  The T1 package (`package/linux-ad/docker-compose.yml`) still contains non-digest images
+  `deploy/dev/docker-compose.dev.yml` and `package/lynadir/docker-compose.yml` (T1 production).
+  Local `lynadir/*:dev` images, `${VAR}` overrides, and `build:` blocks are correctly excluded.
+  The T1 package (`package/lynadir/docker-compose.yml`) still contains non-digest images
   (`freeipa/freeipa-server:rocky-9-4`, `openpolicyagent/opa:latest`, `wazuh/*:4.8.0`) that must
   be resolved and pinned before production use.
 - Trivy scan in CI: `release.yml` includes Trivy scanning of container images with blocking
   severity threshold (HIGH/CRITICAL).
 - Monthly patch cadence: documented in `RELEASE.md` and the design docs.
 
-**Finding:** TM-08 (RESOLVED) — `deploy/dev/docker-compose.dev.yml` uses sha256-pinned images. T1 package (`package/linux-ad/docker-compose.yml`) fully resolved: all 5 images are now digest-pinned with `@sha256:`. HANDOFF: `docs/HANDOFF_PH6_TM-08.md`.
+**Finding:** TM-08 (RESOLVED) — `deploy/dev/docker-compose.dev.yml` uses sha256-pinned images. T1 package (`package/lynadir/docker-compose.yml`) fully resolved: all 5 images are now digest-pinned with `@sha256:`. HANDOFF: `docs/HANDOFF_PH6_TM-08.md`.
 
 ---
 
@@ -311,7 +311,7 @@ or equivalent before first deployment.
 `src/api-gateway/internal/handlers/installers/agent_install.go`:
 - `AgentInstallHandler` serves the script over HTTPS (via the TLS-terminating reverse proxy).
 - The installer script (`agent_install.sh`) downloads the agent binary from GitHub Releases over HTTPS.
-- The binary is served from `https://github.com/kevwillow/linux-ad/releases/download/v{version}/...`.
+- The binary is served from `https://github.com/kevwillow/lynadir/releases/download/v{version}/...`.
 - The release.yml signs binaries with cosign; SHA-256 checksums are available from the release page.
 
 **Finding:** TM-09 (NOTE) — The installer script currently downloads the binary from GitHub Releases at
@@ -395,7 +395,7 @@ The `lac` CLI has `lac ssh-cert request` subcommand. However:
 
 **Resolution:** ✅ RESOLVED — no implementation gap; documentation clarified (2026-05-27, red-team).
 
-The runbook was reviewed against the as-built system and K-05 specification. The key ceremony checklist (lines 346–396) covers all seven phases with two-person integrity. The as-built procedure matches the documentation. K-05 storage is file-based on an offline signer (`/opt/linux-ad-signer/`), consistent with the dev tier and the M3.5 as-built. Production HSM/Vault Transit is a V1.5 aspiration. See **docs/HANDOFF_PH6_TM-11.md** for documentation improvements.
+The runbook was reviewed against the as-built system and K-05 specification. The key ceremony checklist (lines 346–396) covers all seven phases with two-person integrity. The as-built procedure matches the documentation. K-05 storage is file-based on an offline signer (`/opt/lynadir-signer/`), consistent with the dev tier and the M3.5 as-built. Production HSM/Vault Transit is a V1.5 aspiration. See **docs/HANDOFF_PH6_TM-11.md** for documentation improvements.
 
 ---
 
@@ -404,14 +404,14 @@ The runbook was reviewed against the as-built system and K-05 specification. The
 raises a high-severity alert.
 
 **As-built:** ⚠️ PARTIAL — Wazuh agent enrollment and log forwarding exist, but FIM configuration for
-the linux-ad agent's own log files was not verified.
+the Lynadir agent's own log files was not verified.
 
 `src/client-agent/internal/wazuh/install.go` installs and configures the Wazuh agent. The agent registers
 with the Wazuh manager. The `hostconfig` package generates `ossec.conf` fragments. However, whether the
-Wazuh FIM module is configured to monitor the linux-ad agent's own log paths (`/var/log/linux-ad/`)
+Wazuh FIM module is configured to monitor the Lynadir agent's own log paths (`/var/log/lynadir/`)
 and alert on tampering was not verified in this pass.
 
-**Finding:** TM-12 (LOW) — Confirm FIM monitors linux-ad agent logs on managed hosts.
+**Finding:** TM-12 (LOW) — Confirm FIM monitors Lynadir agent logs on managed hosts.
 
 ---
 
@@ -438,7 +438,7 @@ were not reviewed in this pass. The agent's `hostconfig/sssd.go` configures SSSD
 rules from FreeIPA. The audit emission from sudo events depends on Wazuh's syslog/auditd integration.
 
 **Finding:** TM-13 (INFO) — sudo policy scoping is as-designed (OPA + FreeIPA HBAC). Audit of sudo
-events depends on Wazuh syslog/auditd configuration on managed hosts, which is outside the linux-ad
+events depends on Wazuh syslog/auditd configuration on managed hosts, which is outside the Lynadir
 agent's scope (it's host OS configuration).
 
 ---
@@ -467,17 +467,17 @@ policy unit tests in CI.
 **TM-15 Findings — Core policies reviewed:**
 
 Policies confirmed with `default deny` from the start:
-- `linuxad.api.authz` — ✅ Default deny correct. Every operation has explicit allow rules.
-- `linuxad.enrollment.allowed` — ✅ Default deny correct. Super-admin allow, enrollment operator allow,
+- `lynadir.api.authz` — ✅ Default deny correct. Every operation has explicit allow rules.
+- `lynadir.enrollment.allowed` — ✅ Default deny correct. Super-admin allow, enrollment operator allow,
   host-already-enrolled deny, then explicit deny.
-- `linuxad.ssh.access` — ✅ Default deny correct. Super-admin allow, group-allowed SSH, then explicit denies
+- `lynadir.ssh.access` — ✅ Default deny correct. Super-admin allow, group-allowed SSH, then explicit denies
   for principal mismatch, outside access window, no group match.
-- `linuxad.sudo.conditional` — ✅ Default deny correct. Super-admin allow, conditional rules, explicit denies
+- `lynadir.sudo.conditional` — ✅ Default deny correct. Super-admin allow, conditional rules, explicit denies
   for MFA stale, no MFA, approval-required, command not matched.
-- `linuxad.lib.decision` — ✅ `combine_decisions` correctly handles `allow=true` when all sub-decisions allow.
+- `lynadir.lib.decision` — ✅ `combine_decisions` correctly handles `allow=true` when all sub-decisions allow.
   The lib has no `default deny` of its own (it's a helper, not a policy package).
 
-**Bug 1 (FIXED): `linuxad.lib.decision.concat` — undefined on nested arrays**
+**Bug 1 (FIXED): `lynadir.lib.decision.concat` — undefined on nested arrays**
 
 `combine_decisions` uses:
 ```rego
@@ -496,7 +496,7 @@ concat(sep, [[h, tail...]]) = ...
 
 Regression tests added to `policies/lib/decision_test.rego`.
 
-**Bug 2 (FIXED): `linuxad.sudo.conditional.subject_in_rule_groups` — inverted logic**
+**Bug 2 (FIXED): `lynadir.sudo.conditional.subject_in_rule_groups` — inverted logic**
 
 The helper was:
 ```rego
@@ -568,7 +568,7 @@ the default bundle serves at 300s TTL. Mechanism is correctly implemented.
 **Remaining gap (V1 follow-up):** `bundle.critical.tar.gz` is never produced by `scripts/build-policies.sh`
 — the `critical` target does not exist. The TTL mechanism exists but has no artifact to serve.
 `scripts/build-policies.sh` must be updated to add a `critical` target that builds only
-`linuxad.sudo.*`, `linuxad.firewall.*`, and `linuxad.lib.decision`. Additionally, the YAML config field
+`lynadir.sudo.*`, `lynadir.firewall.*`, and `lynadir.lib.decision`. Additionally, the YAML config field
 `CriticalBundleDir` is not plumbed into `CriticalBundlePath` in the bundle server. See
 `docs/HANDOFF_PH6_TM-16.md` for full details and recommended actions.
 
@@ -618,11 +618,11 @@ policy changes require a second approver via the UI.
 
 The `authz.RequireMFA()` middleware enforces fresh MFA for sensitive endpoints. The UI has an Approvals
 inbox (`web/admin-ui/src/pages/Approvals.tsx`, confirmed in M5.6 handoff). However, the backend
-governance policy (`linuxad.governance.require_second_approver`) does not exist, and there is no
+governance policy (`lynadir.governance.require_second_approver`) does not exist, and there is no
 `/api/v1/policies/publish` handler. The two-approver flow is a V1.5 feature.
 
 **Finding:** TM-19 (MEDIUM) — The second-approver requirement for high-impact policy changes should be
-verified in the OPA policy (`linuxad.api.authz`) or in the handler for the policy publish endpoint.
+verified in the OPA policy (`lynadir.api.authz`) or in the handler for the policy publish endpoint.
 
 **Resolution:** ⚠️ DOCUMENTED GAP — DEFERRED TO V1.5 (2026-05-27, go-coder-policy).
 
@@ -735,21 +735,21 @@ golang `golang.org/x/crypto/argon2` package is not directly referenced in the `s
 || TM-05 | MFA enrollment flow and recovery                     | TOTP + WebAuthn; recovery codes printed once; admin can reset MFA only with second-approver MFA challenge | SECURITY_ARCHITECTURE.md §Identity        |
 || TM-06 | Rate limiting on `/oauth/token` endpoint              | ✅ RESOLVED: `OAuthTokenRateLimiter` (5 req/min per IP+UA) added to `ratelimit.go`. `OAuthTokenRateLimitMiddleware` wired in `main.go`. HANDOFF: `docs/HANDOFF_PH6_TM-06.md`. | api-gateway |
 || TM-07 | Refresh token IP + User-Agent binding                | ✅ RESOLVED: `RefreshTokenStore` in `session.go` enforces IP+UA binding. Single-use. Wired into `auth.TokenHandler`. Security events emitted on IP/UA mismatch. Integration tests in `src/api-gateway/internal/handlers/auth/token_integration_test.go`. HANDOFF: `docs/HANDOFF_PH6_TM-07.md`. | api-gateway |
-||| TM-08 | Digest pinning in docker-compose.yml | ✅ RESOLVED (2026-05-27): All images in `package/linux-ad/docker-compose.yml` (T1) are now digest-pinned. `freeipa/freeipa-server:rocky-9-4.12.2@sha256:e1113f67eff871768aa6d2d5929911b28f9e45fd94c8cbecd491daca01f9d40e`, `openpolicyagent/opa:latest@sha256:541f92bc1b3077453b51e3ffc7f529be188bfab56d3600c5907b3e2cb85fb33e`, `wazuh/wazuh-indexer:4.8.0@sha256:42a563f4c94bf498b87fec9b583448f8509d920dc3b39c83f8857142367ccf47`, `wazuh/wazuh-manager:4.8.0@sha256:366f142ebb28920c41bf77af1dcded832a21e9d4ed9a63741656b43639592ca2`, `wazuh/wazuh-dashboard:4.8.0@sha256:ef94e02d31262364d4ea8e1166dda1106959de602aa24d9077628b68287f6b68`. `release.yml` `digest-check` job enforces no non-digest images in CI. `scripts/pin-digests.sh` automates digest updates. See `docs/HANDOFF_PH6_TM-08.md`. | deploy |
+||| TM-08 | Digest pinning in docker-compose.yml | ✅ RESOLVED (2026-05-27): All images in `package/lynadir/docker-compose.yml` (T1) are now digest-pinned. `freeipa/freeipa-server:rocky-9-4.12.2@sha256:e1113f67eff871768aa6d2d5929911b28f9e45fd94c8cbecd491daca01f9d40e`, `openpolicyagent/opa:latest@sha256:541f92bc1b3077453b51e3ffc7f529be188bfab56d3600c5907b3e2cb85fb33e`, `wazuh/wazuh-indexer:4.8.0@sha256:42a563f4c94bf498b87fec9b583448f8509d920dc3b39c83f8857142367ccf47`, `wazuh/wazuh-manager:4.8.0@sha256:366f142ebb28920c41bf77af1dcded832a21e9d4ed9a63741656b43639592ca2`, `wazuh/wazuh-dashboard:4.8.0@sha256:ef94e02d31262364d4ea8e1166dda1106959de602aa24d9077628b68287f6b68`. `release.yml` `digest-check` job enforces no non-digest images in CI. `scripts/pin-digests.sh` automates digest updates. See `docs/HANDOFF_PH6_TM-08.md`. | deploy |
 || TM-09 | Air-gapped installer distribution path               | Document the internal package repo as a V1.5 requirement. V1 acceptable with GitHub Releases. | docs |
 ||| TM-10 | Host keytab scope in IPA API call | ✅ RESOLVED (M7.1 + M7.3): enrollment handler scopes `host_add` and `ipa-getkeytab` to a single host principal `host/<fqdn>@REALM`. Per-tenant principal model (NF-1) extends this to multi-tenant MSP deployments — see TM-25. | api-gateway |
 ||| TM-11 | SSH CA signing key storage and key ceremony | ✅ RESOLVED: ceremony reviewed; as-built matches docs; checklist present; prod HSM is V1.5. See `docs/HANDOFF_PH6_TM-11.md`. | security |
-||| TM-12 | FIM monitoring of linux-ad agent log paths | Confirm `ossec.conf` generated by `hostconfig/wazuh.go` includes FIM for `/var/log/linux-ad/`. | client-agent |
-||| TM-13 | Sudo command audit via Wazuh syslog/auditd | Host OS-level configuration outside linux-ad agent scope. Document as a host hardening prerequisite. | docs |
+||| TM-12 | FIM monitoring of Lynadir agent log paths | Confirm `ossec.conf` generated by `hostconfig/wazuh.go` includes FIM for `/var/log/lynadir/`. | client-agent |
+||| TM-13 | Sudo command audit via Wazuh syslog/auditd | Host OS-level configuration outside Lynadir agent scope. Document as a host hardening prerequisite. | docs |
 ||| TM-14 | Kerberos ticket lifetime enforcement | Verify SSSD config generated by `hostconfig/sssd.go` sets `krb5_lifetime` and per-principal `max_life`. | client-agent |
 ||| TM-15 | OPA policies default-deny review — IN PROGRESS | Partially done: core API authz, enrollment, SSH, sudo, lib/decision reviewed. Two bugs found and fixed (see below). CIS compliance policies not yet reviewed. Remaining: firewall, fim, data, governance packages. | policies |
 || TM-16 | Bundle TTL for security-critical policies | ✅ RESOLVED: `bundle.critical.tar.gz` is now built by `release.yml` (Job: build-policies) and `policies-build.yml` (main branch). Served by `bundle.go` at `/policies/bundle.critical.tar.gz` with `CriticalMaxAge=60s` (≤60s per threat model). Critical bundle sources: `policies/sudo`, `policies/firewall`, `policies/lib/decision.rego`. Signed with K-06 key. See `docs/HANDOFF_PH6_TM-16.md`. | api-gateway + policies |
 | TM-17 | CI policy build pipeline verification | ✅ RESOLVED: `build-policies` job in `release.yml` runs regal lint, `opa test`, `opa eval` fixture regression, `opa build --signature-key`. `policies-build.yml` CI also covers this. `make verify-policies-bundle` target exists. See `docs/HANDOFF_PH6_TM-17.md`. | CI |
-| TM-18 | Audit log sink verification for production | ✅ RESOLVED (2026-05-27): `WazuhEmitter` in `src/common/audit/wazuh.go` sends events to Wazuh indexer via OpenSearch bulk API (`/_bulk`) when `WAZUH_INDEXER_URL` is set; falls back to stdout when not configured so no audit events are silently dropped. Both dev stack (`deploy/dev/docker-compose.dev.yml`) and T1 production package (`package/linux-ad/docker-compose.yml`) wire `WAZUH_INDEXER_URL`, `WAZUH_INDEXER_USER`, `WAZUH_INDEXER_PASS` to api-gateway. Dev stack additionally passes `WAZUH_INDEXER_CA_CERT`. See `docs/HANDOFF_PH6_TM-18.md`. | deploy |
+| TM-18 | Audit log sink verification for production | ✅ RESOLVED (2026-05-27): `WazuhEmitter` in `src/common/audit/wazuh.go` sends events to Wazuh indexer via OpenSearch bulk API (`/_bulk`) when `WAZUH_INDEXER_URL` is set; falls back to stdout when not configured so no audit events are silently dropped. Both dev stack (`deploy/dev/docker-compose.dev.yml`) and T1 production package (`package/lynadir/docker-compose.yml`) wire `WAZUH_INDEXER_URL`, `WAZUH_INDEXER_USER`, `WAZUH_INDEXER_PASS` to api-gateway. Dev stack additionally passes `WAZUH_INDEXER_CA_CERT`. See `docs/HANDOFF_PH6_TM-18.md`. | deploy |
 | TM-19 | Second-approver enforcement for high-impact policy changes | ✅ BUILT — V1.5 feature delivered in Phase 6: `governance.require_second_approver.rego` in `policies/governance/`, `policy.Handler` in `src/api-gateway/internal/handlers/policy/handler.go`, approval store in `src/api-gateway/internal/storage/approval/store.go`. Routes registered in `main.go`. Graceful degradation if governance rule absent (V1 bundle). Migration: `002_policy_approvals.sql`. See `docs/HANDOFF_PH6_TM-19.md` and `docs/HANDOFF_PH6_TM-19_BUILD.md`. | api-gateway |
 | TM-20 | T1 single-node topology and the operator-pivot control | ✅ RESOLVED: T1 exemption documented in threat model. See `docs/HANDOFF_PH6_TM-20.md`. | threat model |
 | TM-21 | TLS 1.3 enforcement in api-gateway Go server | ✅ RESOLVED: `src/common/mtls/tlsconfig.go` sets `MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13`. TLS 1.2 rejected. See `docs/HANDOFF_PH6_TM-21.md`. | api-gateway |
 | TM-22 | Argon2id for locally-managed password hashing | ✅ RESOLVED: No direct password storage in api-gateway. All auth delegates to FreeIPA. Compliant by design. See `docs/HANDOFF_PH6_TM-22.md`. | api-gateway |
 | TM-23 | Internal service clients use TLS 1.2 instead of TLS 1.3 | ✅ RESOLVED (2026-05-27): All 8 TLS 1.2 clients updated to `MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13`. No remaining `tls.VersionTLS12` references in `src/`. See `docs/HANDOFF_PH6_TM-23.md`. | api-gateway + wazuh-bridge |
 | TM-24 | (reserved) | | | |
-| TM-25 | Tenant isolation at the FreeIPA layer (NF-1) | ✅ DESIGNED (2026-06-03): per-tenant Kerberos service principal. Each MSP tenant has a dedicated principal (`linux-ad-<tenant>@REALM`) with its own keytab, and FreeIPA's HBAC / ACI scopes the principal to that tenant's subtree. The api-gateway holds the keytab and selects the right client via `ipa.RPCClientRegistry.Get(tenantID)`. Replaces the prior S-15 "fix" that sent a `{"TenantID": ...}` option key (unknown to FreeIPA, silently discarded). Design doc: `docs/architecture/TENANT_ISOLATION.md`. Residual risk: a fully compromised api-gateway host exposes all per-tenant keytabs — mitigations in §5.1 of the design doc. Per-handler plumbing is a V2-C follow-up (handlers currently hold the admin client only). | api-gateway + FreeIPA operator setup |
+| TM-25 | Tenant isolation at the FreeIPA layer (NF-1) | ✅ DESIGNED (2026-06-03): per-tenant Kerberos service principal. Each MSP tenant has a dedicated principal (`lynadir-<tenant>@REALM`) with its own keytab, and FreeIPA's HBAC / ACI scopes the principal to that tenant's subtree. The api-gateway holds the keytab and selects the right client via `ipa.RPCClientRegistry.Get(tenantID)`. Replaces the prior S-15 "fix" that sent a `{"TenantID": ...}` option key (unknown to FreeIPA, silently discarded). Design doc: `docs/architecture/TENANT_ISOLATION.md`. Residual risk: a fully compromised api-gateway host exposes all per-tenant keytabs — mitigations in §5.1 of the design doc. Per-handler plumbing is a V2-C follow-up (handlers currently hold the admin client only). | api-gateway + FreeIPA operator setup |
