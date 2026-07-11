@@ -3,6 +3,53 @@
 > Status: **DRAFT → REVIEWED** — second pass against as-built system. Owner: security architecture.
 > Last reviewed: 2026-05-26. Previous review: 2026-05-24.
 
+---
+
+## ⭐ V1 verification pass (2026-07-11) — reconciled against live code (AUTHORITATIVE)
+
+The **2026-05-26 narrative body below is a point-in-time as-built audit**. Many items it flags as gaps
+("❌ VIOLATION", "HARD STOP: MISSING IMPLEMENTATION", "stub", "NOT IMPLEMENTED") were fixed in the weeks
+after and the "Open decisions" table (updated through 2026-06-03) marks them RESOLVED — but the narrative
+paragraphs were never updated, so the doc contradicts itself. This pass re-verified each contested item
+against the current source. **Where this section and the older narrative disagree, THIS section wins.**
+
+**Verified RESOLVED (narrative is stale; do not be alarmed by the ❌/HARD-STOP language below):**
+
+| TM | Contested claim (old narrative) | Live ground truth (2026-07-11) |
+|----|----|----|
+| TM-10 | "enrollment handler is a stub, never calls FreeIPA" | FALSE — `enrollment/handler.go` calls `HostAdd`/`GetKeytab`/`IssueHostCert` (:514/533/547); join redeem does the same. Fully wired. |
+| TM-23 | "❌ VIOLATION: 7 internal clients on TLS 1.2" | api-gateway + wazuh-bridge are TLS 1.3-only (31 `MinVersion: VersionTLS13`, zero `VersionTLS12` in `src/api-gateway`/`src/wazuh-bridge`). **BUT the client-agent join bootstrap still used TLS 1.2 → FIXED this pass (see below).** |
+| TM-19 | "second-approver NOT implemented; policies/governance doesn't exist" | Built: `policies/governance/require_approval.rego` + `internal/storage/approval/store.go` + dual-control (opt-in, fail-secure). |
+| TM-16 | "bundle.critical never produced; CriticalBundlePath not plumbed" | `scripts/build-policies.sh` has a `critical` target; `bundle.go` fully plumbs `CriticalBundlePath` (default + served + `CriticalMaxAge`). |
+| TM-08 | "T1 package still has non-digest images" | All 5 images in `package/lynadir/docker-compose.yml` are `@sha256:`-pinned. |
+| TM-14 | "krb5 lifetime not verified in code" | `hostconfig/sssd.go` sets `krb5_lifetime=8h`, `krb5_renewable_lifetime=24h`, `krb5_renew_interval=2h`. |
+| TM-17/18/21/22 | CI build / audit→Wazuh / server TLS1.3 / argon2 "not verified" | All present: `.github/workflows/policies-build.yml`; `src/common/audit/wazuh.go` (`WazuhEmitter`); server `MinVersion: VersionTLS13`; password hashing delegated to FreeIPA (no bcrypt/scrypt/argon2 in `src/`). |
+
+**Real gaps found this pass → FIXED (2026-07-11):**
+- **TM-23 residual (crypto baseline):** `src/client-agent/internal/enroll/join.go` set `MinVersion:
+  tls.VersionTLS12` on all three join-bootstrap TLS configs (CA-file, fingerprint-pin, `--insecure`),
+  below the TLS 1.3 baseline the rest of the stack enforces. **Fixed → `tls.VersionTLS13`** (the gateway
+  edge is TLS 1.3-capable; the other agent paths already used 1.3). The table's "no remaining
+  `VersionTLS12` in `src/`" claim is now actually true.
+- **Account lockout / credential stuffing (was "❓ NOT FOUND"):** the Keycloak realm had **no
+  brute-force protection**. **Fixed** — the production realm template
+  (`deploy/t1/keycloak/realm-lynadir.json.tmpl`) now sets `bruteForceProtected:true`,
+  `failureFactor:10`, temporary lockout (`permanentLockout:false`, `maxFailureWaitSeconds:900`). (Dev
+  provisions its realm separately and additionally has the OIDC 5/min per-IP rate limit.)
+
+**Confirmed DEFERRED-BY-DESIGN for V1 (genuine, documented, acceptable — not "broken"):**
+- **TM-09 air-gapped / no-GitHub installer** — being CLOSED right now: the gateway now serves the
+  agent binary itself (fail-closed Ed25519), replacing GitHub Releases (see the turnkey-install work).
+- **TM-11 residual** (HSM/Vault-Transit signer → V1.5), **TM-20** (operator↔control-plane pivot: N/A on
+  single-node T1), **TM-25** (per-tenant IPA isolation → V2), **TM-12** (Wazuh FIM of the agent's own
+  logs → V1.5; Wazuh is stub in V1), **TM-13** (central sudo-event audit = host-OS config), B1 (public
+  WAF/allowlist → V1.5; V1 is private/VPN-only, SCOPE-10). Network exposure of FreeIPA LDAPS/Kerberos
+  ports is REQUIRED for managed-host SSSD and is bounded by the VPN perimeter (SCOPE-10).
+
+**Still genuinely open (low / informational):** TM-15 CIS-policy default-deny review (compliance-suite
+audit, distinct from the authz default-deny review which IS done); TM-01/02/03/05 architecture
+open-decisions (HA model, bundle distribution, audit retention, MFA recovery — track to closure).
+
 ## Purpose
 
 This document defines **what Lynadir defends against and why.** Every security decision elsewhere in the project should
