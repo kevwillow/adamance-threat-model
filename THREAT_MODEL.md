@@ -21,7 +21,7 @@ against the current source. **Where this section and the older narrative disagre
 | TM-23 | "❌ VIOLATION: 7 internal clients on TLS 1.2" | api-gateway + wazuh-bridge are TLS 1.3-only (31 `MinVersion: VersionTLS13`, zero `VersionTLS12` in `src/api-gateway`/`src/wazuh-bridge`). **BUT the client-agent join bootstrap still used TLS 1.2 → FIXED this pass (see below).** |
 | TM-19 | "second-approver NOT implemented; policies/governance doesn't exist" | Built: `policies/governance/require_approval.rego` + `internal/storage/approval/store.go` + dual-control (opt-in, fail-secure). |
 | TM-16 | "bundle.critical never produced; CriticalBundlePath not plumbed" | `scripts/build-policies.sh` has a `critical` target; `bundle.go` fully plumbs `CriticalBundlePath` (default + served + `CriticalMaxAge`). |
-| TM-08 | "T1 package still has non-digest images" | All 5 images in `package/lynadir/docker-compose.yml` are `@sha256:`-pinned. |
+| TM-08 | "single-host package still has non-digest images" | All 5 images in `package/lynadir/docker-compose.yml` are `@sha256:`-pinned. |
 | TM-14 | "krb5 lifetime not verified in code" | `hostconfig/sssd.go` sets `krb5_lifetime=8h`, `krb5_renewable_lifetime=24h`, `krb5_renew_interval=2h`. |
 | TM-17/18/21/22 | CI build / audit→Wazuh / server TLS1.3 / argon2 "not verified" | All present: `.github/workflows/policies-build.yml`; `src/common/audit/wazuh.go` (`WazuhEmitter`); server `MinVersion: VersionTLS13`; password hashing delegated to FreeIPA (no bcrypt/scrypt/argon2 in `src/`). |
 
@@ -33,7 +33,7 @@ against the current source. **Where this section and the older narrative disagre
   `VersionTLS12` in `src/`" claim is now actually true.
 - **Account lockout / credential stuffing (was "❓ NOT FOUND"):** the Keycloak realm had **no
   brute-force protection**. **Fixed** — the production realm template
-  (`deploy/t1/keycloak/realm-lynadir.json.tmpl`) now sets `bruteForceProtected:true`,
+  (`deploy/setup/keycloak/realm-lynadir.json.tmpl`) now sets `bruteForceProtected:true`,
   `failureFactor:10`, temporary lockout (`permanentLockout:false`, `maxFailureWaitSeconds:900`). (Dev
   provisions its realm separately and additionally has the OIDC 5/min per-IP rate limit.)
 
@@ -41,7 +41,7 @@ against the current source. **Where this section and the older narrative disagre
 - **TM-09 air-gapped / no-GitHub installer** — being CLOSED right now: the gateway now serves the
   agent binary itself (fail-closed Ed25519), replacing GitHub Releases (see the turnkey-install work).
 - **TM-11 residual** (HSM/Vault-Transit signer → V1.5), **TM-20** (operator↔control-plane pivot: N/A on
-  single-node T1), **TM-25** (per-tenant IPA isolation → V2), **TM-12** (Wazuh FIM of the agent's own
+  single-host), **TM-25** (per-tenant IPA isolation → V2), **TM-12** (Wazuh FIM of the agent's own
   logs → V1.5; Wazuh is stub in V1), **TM-13** (central sudo-event audit = host-OS config), B1 (public
   WAF/allowlist → V1.5; V1 is private/VPN-only, SCOPE-10). Network exposure of FreeIPA LDAPS/Kerberos
   ports is REQUIRED for managed-host SSSD and is bounded by the VPN perimeter (SCOPE-10).
@@ -96,18 +96,18 @@ Ranked by blast radius if compromised:
 
 ## Trust boundaries
 
-| From                          | To                          | Boundary type              | Authentication                    | Channel                 |
-| ----------------------------- | --------------------------- | -------------------------- | --------------------------------- | ----------------------- |
-| User browser                  | Reverse proxy / UI          | Public ↔ edge              | TLS server cert                   | TLS 1.3                 |
-| Admin UI                      | API gateway                 | Edge ↔ control plane       | OIDC bearer JWT + CSRF token      | TLS 1.3                 |
-| API gateway                   | FreeIPA                     | Intra-control-plane        | Service principal + GSSAPI        | LDAPS / Kerberos        |
-| API gateway                   | OPA                         | Intra-control-plane        | mTLS (SPIFFE-style SVIDs)         | HTTPS                   |
-| API gateway                   | Wazuh API                   | Intra-control-plane        | mTLS + scoped API key             | HTTPS                   |
-| API gateway                   | Postgres                    | Intra-control-plane        | DB credential (Vault-issued)      | TLS (local socket in T1) |
-| Managed host (SSSD)           | FreeIPA                     | Untrusted ↔ control plane  | Host keytab                       | Kerberos / LDAPS        |
-| Managed host (Wazuh agent)    | Wazuh manager               | Untrusted ↔ control plane  | Pre-shared agent key, mutual auth | Wazuh proto (encrypted) |
-| Managed host (Lynadir agent) | OPA bundle endpoint         | Untrusted ↔ control plane  | Signed bundles + mTLS host cert   | HTTPS                   |
-| Operator workstation          | Control plane (break-glass) | Privileged ↔ control plane | Hardware token + audited bastion  | SSH over WireGuard      |
+| From                          | To                          | Boundary type              | Authentication                    | Channel                           |
+| ----------------------------- | --------------------------- | -------------------------- | --------------------------------- | --------------------------------- |
+| User browser                  | Reverse proxy / UI          | Public ↔ edge              | TLS server cert                   | TLS 1.3                           |
+| Admin UI                      | API gateway                 | Edge ↔ control plane       | OIDC bearer JWT + CSRF token      | TLS 1.3                           |
+| API gateway                   | FreeIPA                     | Intra-control-plane        | Service principal + GSSAPI        | LDAPS / Kerberos                  |
+| API gateway                   | OPA                         | Intra-control-plane        | mTLS (SPIFFE-style SVIDs)         | HTTPS                             |
+| API gateway                   | Wazuh API                   | Intra-control-plane        | mTLS + scoped API key             | HTTPS                             |
+| API gateway                   | Postgres                    | Intra-control-plane        | DB credential (Vault-issued)      | TLS (local socket in single-host) |
+| Managed host (SSSD)           | FreeIPA                     | Untrusted ↔ control plane  | Host keytab                       | Kerberos / LDAPS                  |
+| Managed host (Wazuh agent)    | Wazuh manager               | Untrusted ↔ control plane  | Pre-shared agent key, mutual auth | Wazuh proto (encrypted)           |
+| Managed host (Lynadir agent) | OPA bundle endpoint         | Untrusted ↔ control plane  | Signed bundles + mTLS host cert   | HTTPS                             |
+| Operator workstation          | Control plane (break-glass) | Privileged ↔ control plane | Hardware token + audited bastion  | SSH over WireGuard                |
 
 ## Adversaries
 
@@ -305,16 +305,16 @@ documented monthly patch cadence.
 - Digest pinning: `deploy/dev/docker-compose.dev.yml` uses digest-pinned images for all external
   services (`postgres@sha256:...`, `smallstep/step-ca@sha256:...`, `caddy@sha256:...`).
   `digest-check` CI job (release.yml) enforces that no non-digest image tag passes CI for both
-  `deploy/dev/docker-compose.dev.yml` and `package/lynadir/docker-compose.yml` (T1 production).
+  `deploy/dev/docker-compose.dev.yml` and `package/lynadir/docker-compose.yml` (single-host production).
   Local `lynadir/*:dev` images, `${VAR}` overrides, and `build:` blocks are correctly excluded.
-  The T1 package (`package/lynadir/docker-compose.yml`) still contains non-digest images
+  The single-host package (`package/lynadir/docker-compose.yml`) still contains non-digest images
   (`freeipa/freeipa-server:rocky-9-4`, `openpolicyagent/opa:latest`, `wazuh/*:4.8.0`) that must
   be resolved and pinned before production use.
 - Trivy scan in CI: `release.yml` includes Trivy scanning of container images with blocking
   severity threshold (HIGH/CRITICAL).
 - Monthly patch cadence: documented in `RELEASE.md` and the design docs.
 
-**Finding:** TM-08 (RESOLVED) — `deploy/dev/docker-compose.dev.yml` uses sha256-pinned images. T1 package (`package/lynadir/docker-compose.yml`) fully resolved: all 5 images are now digest-pinned with `@sha256:`.
+**Finding:** TM-08 (RESOLVED) — `deploy/dev/docker-compose.dev.yml` uses sha256-pinned images. single-host package (`package/lynadir/docker-compose.yml`) fully resolved: all 5 images are now digest-pinned with `@sha256:`.
 
 ---
 
@@ -653,7 +653,7 @@ the session. The `src/common/audit` package formats audit events consistently. W
 reach Wazuh (vs. stdout only in dev mode) depends on the deployment's log routing configuration, which
 was not reviewed.
 
-**Finding:** TM-18 (RESOLVED) — `WazuhEmitter` confirmed routing to Wazuh indexer via OpenSearch bulk API. Both dev stack and T1 package wire `WAZUH_INDEXER_URL`. StdoutEmitter fallback when not configured — no silent audit drop.
+**Finding:** TM-18 (RESOLVED) — `WazuhEmitter` confirmed routing to Wazuh indexer via OpenSearch bulk API. Both dev stack and the single-host package wire `WAZUH_INDEXER_URL`. StdoutEmitter fallback when not configured — no silent audit drop.
 
 ---
 
@@ -699,16 +699,16 @@ API gateway service account has no SSH access to other control plane hosts.
 
 **As-built:** ⚠️ NOT VERIFIED — this is a deployment topology control.
 
-The T1 deployment (single host) necessarily runs all control plane components on the same host. The
+The single-host deployment necessarily runs all control plane components on the same host. The
 security architecture document acknowledges this and the multi-node topology (V1.5) is where this
-control becomes meaningful. For T1, the finding is documented.
+control becomes meaningful. For single-host, the finding is documented.
 
-**Finding:** TM-20 (INFO) — This control is not enforceable in the T1 single-node topology. It applies
-to T2/T3. The threat model should note this explicitly (T1 exemption documented).
+**Finding:** TM-20 (INFO) — This control is not enforceable in the single-host topology. It applies
+to HA/multi-site. The threat model should note this explicitly (single-host exemption documented).
 
-**Resolution:** ✅ RESOLVED — T1 exemption note added (2026-05-27, red-team).
+**Resolution:** ✅ RESOLVED — single-host exemption note added (2026-05-27, red-team).
 
-This control applies to T2/T3 topologies only. In T1 (single-node), the operator and the control plane share the same host; this control is not enforceable. The V1 deployment guide documents this as a known limitation.
+This control applies to HA/multi-site topologies only. In single-host, the operator and the control plane share the same host; this control is not enforceable. The V1 deployment guide documents this as a known limitation.
 
 ---
 
@@ -781,7 +781,7 @@ golang `golang.org/x/crypto/argon2` package is not directly referenced in the `s
 | TM-05 | MFA enrollment flow and recovery                     | TOTP + WebAuthn; recovery codes printed once; admin can reset MFA only with second-approver MFA challenge | SECURITY_ARCHITECTURE.md §Identity        |
 | TM-06 | Rate limiting on `/oauth/token` endpoint | ✅ RESOLVED: `OAuthTokenRateLimiter` (5 req/min per IP+UA) added to `ratelimit.go`. `OAuthTokenRateLimitMiddleware` wired in `main.go`. | api-gateway |
 | TM-07 | Refresh token IP + User-Agent binding | ✅ RESOLVED: `RefreshTokenStore` in `session.go` enforces IP+UA binding. Single-use. Wired into `auth.TokenHandler`. Security events emitted on IP/UA mismatch. Integration tests in `src/api-gateway/internal/handlers/auth/token_integration_test.go`. | api-gateway |
-| TM-08 | Digest pinning in docker-compose.yml | ✅ RESOLVED (2026-05-27): All images in `package/lynadir/docker-compose.yml` (T1) are now digest-pinned. `freeipa/freeipa-server:rocky-9-4.12.2@sha256:e1113f67eff871768aa6d2d5929911b28f9e45fd94c8cbecd491daca01f9d40e`, `openpolicyagent/opa:latest@sha256:541f92bc1b3077453b51e3ffc7f529be188bfab56d3600c5907b3e2cb85fb33e`, `wazuh/wazuh-indexer:4.8.0@sha256:42a563f4c94bf498b87fec9b583448f8509d920dc3b39c83f8857142367ccf47`, `wazuh/wazuh-manager:4.8.0@sha256:366f142ebb28920c41bf77af1dcded832a21e9d4ed9a63741656b43639592ca2`, `wazuh/wazuh-dashboard:4.8.0@sha256:ef94e02d31262364d4ea8e1166dda1106959de602aa24d9077628b68287f6b68`. `release.yml` `digest-check` job enforces no non-digest images in CI. `scripts/pin-digests.sh` automates digest updates. | deploy |
+| TM-08 | Digest pinning in docker-compose.yml | ✅ RESOLVED (2026-05-27): All images in `package/lynadir/docker-compose.yml` (single-host) are now digest-pinned. `freeipa/freeipa-server:rocky-9-4.12.2@sha256:e1113f67eff871768aa6d2d5929911b28f9e45fd94c8cbecd491daca01f9d40e`, `openpolicyagent/opa:latest@sha256:541f92bc1b3077453b51e3ffc7f529be188bfab56d3600c5907b3e2cb85fb33e`, `wazuh/wazuh-indexer:4.8.0@sha256:42a563f4c94bf498b87fec9b583448f8509d920dc3b39c83f8857142367ccf47`, `wazuh/wazuh-manager:4.8.0@sha256:366f142ebb28920c41bf77af1dcded832a21e9d4ed9a63741656b43639592ca2`, `wazuh/wazuh-dashboard:4.8.0@sha256:ef94e02d31262364d4ea8e1166dda1106959de602aa24d9077628b68287f6b68`. `release.yml` `digest-check` job enforces no non-digest images in CI. `scripts/pin-digests.sh` automates digest updates. | deploy |
 | TM-09 | Air-gapped installer distribution path               | Document the internal package repo as a V1.5 requirement. V1 acceptable with GitHub Releases. | docs |
 | TM-10 | Host keytab scope in IPA API call | ✅ RESOLVED (M7.1 + M7.3): enrollment handler scopes `host_add` and `ipa-getkeytab` to a single host principal `host/<fqdn>@REALM`. (The multi-tenant/MSP extension is descoped — single-tenant V1; see TM-25.) | api-gateway |
 | TM-11 | SSH CA signing key storage and key ceremony | ✅ RESOLVED: ceremony reviewed; as-built matches docs; checklist present; prod HSM is V1.5. | security |
@@ -791,9 +791,9 @@ golang `golang.org/x/crypto/argon2` package is not directly referenced in the `s
 | TM-15 | OPA policies default-deny review — IN PROGRESS | Partially done: core API authz, enrollment, SSH, sudo, lib/decision reviewed. Two bugs found and fixed (see below). CIS compliance policies not yet reviewed. Remaining: firewall, fim, data, governance packages. | policies |
 | TM-16 | Bundle TTL for security-critical policies | ✅ RESOLVED: `bundle.critical.tar.gz` is now built by `release.yml` (Job: build-policies) and `policies-build.yml` (main branch). Served by `bundle.go` at `/policies/bundle.critical.tar.gz` with `CriticalMaxAge=60s` (≤60s per threat model). Critical bundle sources: `policies/sudo`, `policies/firewall`, `policies/lib/decision.rego`. Signed with K-06 key. | api-gateway + policies |
 | TM-17 | CI policy build pipeline verification | ✅ RESOLVED: `build-policies` job in `release.yml` runs regal lint, `opa test`, `opa eval` fixture regression, `opa build --signature-key`. `policies-build.yml` CI also covers this. `make verify-policies-bundle` target exists. | CI |
-| TM-18 | Audit log sink verification for production | ✅ RESOLVED (2026-05-27): `WazuhEmitter` in `src/common/audit/wazuh.go` sends events to Wazuh indexer via OpenSearch bulk API (`/_bulk`) when `WAZUH_INDEXER_URL` is set; falls back to stdout when not configured so no audit events are silently dropped. Both dev stack (`deploy/dev/docker-compose.dev.yml`) and T1 production package (`package/lynadir/docker-compose.yml`) wire `WAZUH_INDEXER_URL`, `WAZUH_INDEXER_USER`, `WAZUH_INDEXER_PASS` to api-gateway. Dev stack additionally passes `WAZUH_INDEXER_CA_CERT`. | deploy |
+| TM-18 | Audit log sink verification for production | ✅ RESOLVED (2026-05-27): `WazuhEmitter` in `src/common/audit/wazuh.go` sends events to Wazuh indexer via OpenSearch bulk API (`/_bulk`) when `WAZUH_INDEXER_URL` is set; falls back to stdout when not configured so no audit events are silently dropped. Both dev stack (`deploy/dev/docker-compose.dev.yml`) and the single-host production package (`package/lynadir/docker-compose.yml`) wire `WAZUH_INDEXER_URL`, `WAZUH_INDEXER_USER`, `WAZUH_INDEXER_PASS` to api-gateway. Dev stack additionally passes `WAZUH_INDEXER_CA_CERT`. | deploy |
 | TM-19 | Second-approver enforcement for high-impact policy changes | ✅ BUILT — V1.5 feature delivered in Phase 6: `governance.require_second_approver.rego` in `policies/governance/`, `policy.Handler` in `src/api-gateway/internal/handlers/policy/handler.go`, approval store in `src/api-gateway/internal/storage/approval/store.go`. Routes registered in `main.go`. Graceful degradation if governance rule absent (V1 bundle). Migration: `002_policy_approvals.sql`. | api-gateway |
-| TM-20 | T1 single-node topology and the operator-pivot control | ✅ RESOLVED: T1 exemption documented in threat model. | threat model |
+| TM-20 | single-host topology and the operator-pivot control | ✅ RESOLVED: single-host exemption documented in threat model. | threat model |
 | TM-21 | TLS 1.3 enforcement in api-gateway Go server | ✅ RESOLVED: `src/common/mtls/tlsconfig.go` sets `MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13`. TLS 1.2 rejected. | api-gateway |
 | TM-22 | Argon2id for locally-managed password hashing | ✅ RESOLVED: No direct password storage in api-gateway. All auth delegates to FreeIPA. Compliant by design. | api-gateway |
 | TM-23 | Internal service clients use TLS 1.2 instead of TLS 1.3 | ✅ RESOLVED (2026-05-27): the 8 api-gateway/wazuh-bridge clients → `MinVersion: tls.VersionTLS13`. **2026-07-11 re-verification caught a residual the "no VersionTLS12 in src/" claim missed: the client-agent join bootstrap (`enroll/join.go`, 3 paths) still allowed TLS 1.2 → fixed to `tls.VersionTLS13` (commit `574dfad`). Now genuinely zero `VersionTLS12` in `src/`.** | api-gateway + wazuh-bridge + client-agent |
