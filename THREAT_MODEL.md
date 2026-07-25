@@ -451,15 +451,27 @@ The runbook was reviewed against the as-built system and K-05 specification. The
 **Required control:** Wazuh agent forwards logs in real time. Local log tampering is detected by FIM and
 raises a high-severity alert.
 
-**As-built:** ⚠️ PARTIAL — Wazuh agent enrollment and log forwarding exist, but FIM configuration for
-the adamance agent's own log files was not verified.
+**As-built:** ⚠️ PARTIAL — and weaker than this document previously claimed. adamance does **not**
+install the Wazuh agent on managed hosts; the agent binary is operator-provided. A host without one is
+still fully governed (nothing gates on `wazuh_agent_status`) but forwards **no** logs to the SIEM, so
+this control is absent on any such host rather than merely unverified.
 
-`src/client-agent/internal/wazuh/install.go` installs and configures the Wazuh agent. The agent registers
-with the Wazuh manager. The `hostconfig` package generates `ossec.conf` fragments. However, whether the
-Wazuh FIM module is configured to monitor the adamance agent's own log paths (`/var/log/adamance/`)
-and alert on tampering was not verified in this pass.
+`src/client-agent/internal/wazuh/register.go` registers an **already-installed** agent with the Wazuh
+manager and patches `ossec.conf` to point at it; registration is non-fatal and is skipped when no agent
+is present. Where an agent does exist, enrollment and log forwarding work. Whether the Wazuh FIM module
+monitors the adamance agent's own log paths (`/var/log/adamance/`) and alerts on tampering remains
+unverified.
+
+An earlier revision of this section cited `src/client-agent/internal/wazuh/install.go` as evidence that
+adamance installed and configured the agent. That file was unreachable code — gated on a `wazuh_key` the
+server never populated — and has been deleted. It never ran on any host, so the control it was cited as
+evidence for was never delivered by that path. Recorded here because a threat model that cites
+non-executing code as as-built evidence is worse than one that admits a gap.
 
 **Finding:** TM-12 (LOW) — Confirm FIM monitors adamance agent logs on managed hosts.
+**Finding:** TM-12b (MED) — This control depends on an operator-installed Wazuh agent. Either surface
+per-host SIEM coverage so the gap is visible, or land the gateway-served pinned wazuh-agent package so
+hosts obtain one automatically (backlog).
 
 ---
 
