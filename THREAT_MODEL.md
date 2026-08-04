@@ -211,17 +211,15 @@ State these so we don't accidentally drift into pretending we cover them:
   second-approver role.
 - We do not provide **anti-coercion** (rubber-hose attacks).
 
-## Open decisions
+## Open decisions — recorded at the end of this document
 
-Tracked here until resolved; each links to a follow-up doc when written.
+The authoritative table is **[Open decisions](#open-decisions)**, in the second-pass review below.
 
-| ID    | Decision                                             | Proposed direction                                                                                        | Owner                                     |
-| ----- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| TM-01 | HA model for FreeIPA                                 | Multi-master replication across 2+ nodes; documented failover runbook                                     | SECURITY_ARCHITECTURE.md §Availability    |
-| TM-02 | Where does the OPA bundle live and how is it served? | Built in CI, signed offline, served by the API gateway over mTLS, cached locally on each agent            | POLICY_MODEL.md §Distribution             |
-| TM-03 | Audit log retention and immutability                 | 90 days hot in Wazuh indexer; 1 year cold in object storage with object lock                              | SECURITY_ARCHITECTURE.md §Audit           |
-| TM-04 | Break-glass procedure for total directory loss       | Offline-encrypted root credentials in a sealed envelope; procedure documented (resolved). Remaining gap is only the `RUNBOOKS/` operational copy (V1_IMPLEMENTATION Phase 5). | `docs/break-glass.md` + GOVERNANCE.md §Break-glass (GOV-04) |
-| TM-05 | MFA enrollment flow and recovery                     | TOTP + WebAuthn; recovery codes printed once; admin can reset MFA only with second-approver MFA challenge | SECURITY_ARCHITECTURE.md §Identity        |
+A duplicate copy of it stood here until 2026-08-03, carrying TM-01 through TM-05 with byte-identical
+text. The later table is a strict superset (TM-01 through TM-25) and records which decisions have since
+been RESOLVED, so the copy here could only ever go stale against it — two tables of the same IDs is how
+a document drifts from itself. It was removed rather than reworded; nothing was lost, because every row
+it held is still in the authoritative table verbatim.
 
 ## Revision history
 
