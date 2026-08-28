@@ -741,7 +741,7 @@ The api-gateway server correctly enforces TLS 1.3 via `src/common/mtls/tlsconfig
 | File | Line | Client |
 | ---- | ---- | ------ |
 | `src/api-gateway/internal/sshca/client.go` | 75 | SSH CA client |
-| `src/api-gateway/internal/sshca/crl.go` | 61 | CRL fetcher |
+| `src/api-gateway/internal/handlers/sshca/crl.go` | 61 | CRL fetcher |
 | `src/api-gateway/internal/integrations/wazuh/client.go` | 64 | Wazuh API client |
 | `src/api-gateway/internal/ipa/rpc_client.go` | 34 | FreeIPA RPC client |
 | `src/api-gateway/internal/ipa/ldap_client.go` | 75, 142 | FreeIPA LDAP client |
