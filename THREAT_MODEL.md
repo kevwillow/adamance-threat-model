@@ -671,20 +671,27 @@ was not reviewed.
 **Required control:** Sensitive operations require fresh MFA (step-up within last 5 minutes). High-impact
 policy changes require a second approver via the UI.
 
-**As-built:** ✅ CONFIRMED for MFA step-up. ❌ SECOND APPROVER NOT IMPLEMENTED.
+**As-built:** ✅ CONFIRMED for MFA step-up. ✅ DUAL CONTROL BUILT AND FAIL-CLOSED (2026-08-28).
 
 The `authz.RequireMFA()` middleware enforces fresh MFA for sensitive endpoints. The UI has an Approvals
-inbox (`web/admin-ui/src/pages/Approvals.tsx`, confirmed in M5.6 handoff). However, the backend
-governance policy (`adamance.governance.require_second_approver`) does not exist, and there is no
-`/api/v1/policies/publish` handler. The two-approver flow is a V1.5 feature.
+inbox (`web/admin-ui/src/pages/Approvals.tsx`). The backend gate is the OPA decision
+`governance.require_approval` — `policies/governance/require_approval.rego`, evaluated by
+`src/api-gateway/internal/handlers/policy/handler.go` on `POST /api/v1/policies/publish`
+(route registered at `src/api-gateway/cmd/server/main.go:4819`). It requires 2 distinct non-self
+approvers and forbids self-approval, and it refuses the publish when the rule is not loaded rather
+than skipping the check.
 
 **Finding:** TM-19 (MEDIUM) — The second-approver requirement for high-impact policy changes should be
 verified in the OPA policy (`adamance.api.authz`) or in the handler for the policy publish endpoint.
 
-**Resolution:** ⚠️ DOCUMENTED GAP — DEFERRED TO V1.5 (2026-05-27, go-coder-policy).
+**Resolution:** ✅ RESOLVED (2026-06-11, commit `b7051bcc`). Superseded the 2026-05-27 assessment below.
 
-The governance policy framework (`policies/governance/`) and policy publish handler do not exist.
-This is a V1.5 feature; TM-19 is not a V1 ship blocker.
+⚠️ **The paragraph this replaced was wrong for 78 days and said the opposite.** It claimed the
+governance policy framework and the publish handler "do not exist" and deferred TM-19 to V1.5. Both
+had landed. The rule it named — `adamance.governance.require_second_approver` — never compiled under
+opa 0.69, which left the publish gate FAIL-OPEN; `b7051bcc` retired it, routed policy-publish through
+`governance.require_approval`, and `src/api-gateway/internal/handlers/policy/handler.go:365` now fails
+CLOSED on a missing rule. See `policies/governance/README.md`, which carried the same dead name.
 
 ---
 
@@ -802,7 +809,7 @@ golang `golang.org/x/crypto/argon2` package is not directly referenced in the `s
 | TM-16 | Bundle TTL for security-critical policies | ✅ RESOLVED: `bundle.critical.tar.gz` is now built by `release.yml` (Job: build-policies) and `policies-build.yml` (main branch). Served by `bundle.go` at `/policies/bundle.critical.tar.gz` with `CriticalMaxAge=60s` (≤60s per threat model). Critical bundle sources: `policies/firewall`, `policies/lib/decision.rego` (`policies/sudo` was REMOVED — see `DESIGN_sudo_policy_via_freeipa.md`; the build now FAILS if a listed critical source is missing). Signed with K-06 key. | api-gateway + policies |
 | TM-17 | CI policy build pipeline verification | ✅ RESOLVED: `build-policies` job in `release.yml` runs regal lint, `opa test`, `opa eval` fixture regression, `opa build --signature-key`. `policies-build.yml` CI also covers this. `make verify-policies-bundle` target exists. | CI |
 | TM-18 | Audit log sink verification for production | ✅ RESOLVED (2026-05-27): `WazuhEmitter` in `src/common/audit/wazuh.go` sends events to Wazuh indexer via OpenSearch bulk API (`/_bulk`) when `WAZUH_INDEXER_URL` is set; falls back to stdout when not configured so no audit events are silently dropped. Both dev stack (`deploy/dev/docker-compose.dev.yml`) and the single-host production package (`package/adamance/docker-compose.yml`) wire `WAZUH_INDEXER_URL`, `WAZUH_INDEXER_USER`, `WAZUH_INDEXER_PASS` to api-gateway. Dev stack additionally passes `WAZUH_INDEXER_CA_CERT`. | deploy |
-| TM-19 | Second-approver enforcement for high-impact policy changes | ✅ BUILT — V1.5 feature delivered in Phase 6: `governance.require_second_approver.rego` in `policies/governance/`, `policy.Handler` in `src/api-gateway/internal/handlers/policy/handler.go`, approval store in `src/api-gateway/internal/storage/approval/store.go`. Routes registered in `main.go`. Graceful degradation if governance rule absent (V1 bundle). Migration: `002_policy_approvals.sql`. | api-gateway |
+| TM-19 | Second-approver enforcement for high-impact policy changes | ✅ RESOLVED (2026-06-11, `b7051bcc`): `policies/governance/require_approval.rego` (decision `governance.require_approval`, 2 distinct non-self approvers), `policy.Handler` in `src/api-gateway/internal/handlers/policy/handler.go`, approval store in `src/api-gateway/internal/storage/approval/store.go`, route at `src/api-gateway/cmd/server/main.go:4819`. ⛔ **NOT graceful degradation — it fails CLOSED**: `handler.go:365` refuses the publish when the rule is not loaded. The legacy `governance.require_second_approver` never compiled and left this gate fail-OPEN; it was retired. Migration: `src/api-gateway/internal/db/migrations/0008_policy_change_approvals.sql` (renumbered from `002_policy_approvals` by the 2026-06-15 consolidation). | api-gateway |
 | TM-20 | single-host topology and the operator-pivot control | ✅ RESOLVED: single-host exemption documented in threat model. | threat model |
 | TM-21 | TLS 1.3 enforcement in api-gateway Go server | ✅ RESOLVED: `src/common/mtls/tlsconfig.go` sets `MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13`. TLS 1.2 rejected. | api-gateway |
 | TM-22 | Argon2id for locally-managed password hashing | ✅ RESOLVED: No direct password storage in api-gateway. All auth delegates to FreeIPA. Compliant by design. | api-gateway |
