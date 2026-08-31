@@ -168,7 +168,7 @@ requirements; if it's not built, the threat is open.
 | Compromised host uses its keytab to authenticate as another host | Host keytabs grant only the host's own identity. No transitive trust. User SSH uses **ephemeral certificates** issued by the internal SSH CA (step-ca, ARCH-05 — see `PAM_STACK.md`); host credentials are not accepted for user-initiated SSH. |
 | Theft or misuse of the SSH CA signing key (issue rogue user certs) | SSH CA (step-ca, K-05) is a separate trust chain from Dogtag (CRYPTO-07); signing key home is Vault Transit / sealed offline file. Certs are short-lived; revocation/CRL distribution and CA-key-compromise threats are enumerated in `PAM_STACK.md` §"Threats addressed and not". |
 | Compromised host modifies its own audit logs to hide activity    | Wazuh agent forwards logs in real time. Local log tampering is detected by FIM and raises a high-severity alert. Critical events trigger immediate active response.                     |
-| Compromised host pulls sensitive policies it shouldn't see       | OPA bundles are scoped per host group. A host pulls only the policies it's targeted by. Bundle requests are authenticated with the host certificate.                                    |
+| Compromised host pulls sensitive policies it shouldn't see       | 🔴 **NOT MITIGATED — corrected 2026-08-31.** Bundle requests are authenticated with the host certificate, and that is ALL that is checked. Bundles are **not** scoped per host group: every enrolled host receives byte-identical bundles. See the as-built note below. |
 | Compromised host abuses its sudo rights to escalate              | sudo rules are scoped narrowly (specific commands, not `ALL=(ALL)`). Sudo invocations are audit-logged centrally and trigger alerts on anomaly.                                         |
 | Stolen user TGT used from another host                           | Tickets are bound to addresses where possible. Short ticket lifetime (8h default per SSSD `krb5_lifetime`; 1h target for admin principals, enforced via per-principal KDC policy `max_life` — see SECURITY_ARCHITECTURE.md §Cryptographic standards). Renewal requires re-auth past max renewable lifetime (24h). |
 
@@ -476,14 +476,37 @@ hosts obtain one automatically (backlog).
 #### Compromised host pulls sensitive policies it shouldn't see
 **Required control:** OPA bundles are scoped per host group. Bundle requests authenticated with host cert.
 
-**As-built:** ✅ CONFIRMED.
+**As-built:** 🔴 **REFUTED 2026-08-31. This row previously read "✅ CONFIRMED / Finding: NONE" and
+that was false.** It is corrected in place rather than deleted, because a threat-model row that
+recorded a control as *verified* when nothing implemented it is itself the most important finding
+here: every later reader took it as an audit result.
 
-`src/api-gateway/internal/bundle/bundle.go` serves bundles. `src/client-agent/internal/bundle/pull.go`
-pulls bundles authenticated with the host mTLS certificate. Bundle scoping by host group is implemented
-in the OPA bundle server (path-based or query-parameter-based targeting). The agent verifies bundle
-signatures before applying.
+What is true: `src/client-agent/internal/bundle/pull.go` pulls over the host mTLS certificate, and
+the agent verifies bundle signatures before applying. Both hold.
 
-**Finding:** NONE.
+What is false: **there is no scoping of any kind.** `src/api-gateway/internal/bundle/bundle.go`'s
+`ServeHTTP` selects a bundle with `switch path.Base(r.URL.Path)` — that switch chooses the bundle
+*kind* (operational, compliance), never the *caller*. `HostIdentityFromContext` is never called
+anywhere in the `bundle` package, so the served bytes cannot depend on who asked. The agent could
+not request a scoped bundle even if the server offered one: `pull.go` builds one fixed path and
+sends no query parameter. The parenthetical "(path-based or query-parameter-based targeting)" above
+described two mechanisms, neither of which exists.
+
+**Finding:** 🔴 **OPEN — fleet-wide disclosure to any single enrolled host.** The operational
+bundle carries fleet-wide maps: `deploy/dev/policy-data/host_group.json` is `{FQDN: host_group}`
+and `host_tiers.json` is `{FQDN: approval_tier}`, both for **every** host. ⇒ root on any one
+enrolled host, using that host's own legitimate certificate, reads every other host's FQDN, host
+group and SSH approval tier. That is not privilege escalation — it is reconnaissance, and it is
+precisely what this row exists to prevent.
+
+⚖️ **The fix is a ruling, not a patch.** Per-caller bundles mean per-caller signing and cache
+keys, which changes the TTL and revision model the agent relies on. The narrower alternative is to
+stop shipping fleet-wide host maps in a bundle every host can read. Recorded here rather than
+decided.
+
+⛔ **Do not re-close this row on the strength of the mTLS check.** Authenticating the caller and
+scoping the response are different controls; conflating them is how this row came to say
+CONFIRMED.
 
 ---
 
