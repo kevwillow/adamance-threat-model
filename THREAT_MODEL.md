@@ -270,9 +270,33 @@ after N failed attempts with exponential backoff.
 
 **As-built:** ⚠️ PARTIAL.
 
-- MFA requirement: ✅ CONFIRMED. `src/api-gateway/internal/session/session.go` validates MFA via
-  `mfa_verified` claim in the JWT. `src/api-gateway/internal/middleware/mfa.go` (referenced in main.go
-  setup) enforces step-up. The FreeIPA backend is configured for OTP/WebAuthn.
+- MFA requirement: ⚠️ **PARTIAL — corrected 2026-09-01. This bullet read "✅ CONFIRMED" and named three
+  things that are not true.** `src/api-gateway/internal/middleware/mfa.go` has never existed in this repo
+  (no commit in `git log --all --diff-filter=A` adds it); there is no `mfa_verified` JWT claim anywhere in
+  the tree — the `mfa_verified_at` columns in `src/api-gateway/internal/storage/refreshtokens/store.go`
+  and `src/api-gateway/internal/storage/approval/store.go` are unrelated refresh-token and approval-proof
+  timestamps; and the OTP authority is Keycloak, not FreeIPA —
+  `src/api-gateway/internal/handlers/users/handler.go:1561-1562` records that the FreeIPA `otptoken` path
+  is cosmetic because Keycloak never checks it. No WebAuthn authenticator is implemented here either: no
+  Go code enrols or verifies a WebAuthn credential. `webauthn` appears only as an accepted `amr` value
+  (`configs/api-gateway/api-gateway.prod.yml:81`, `configs/api-gateway/api-gateway.dev.yml:93`), as one of
+  the pass-through approval-proof method strings (`src/api-gateway/internal/storage/approval/store.go:113`,
+  labelled by `web/admin-ui/src/lib/approverproofs.ts:96`), and as an unbuilt DRAFT design in
+  `docs/MFA_DESIGN.md`.
+  What is true: the JWT carries `mfa_enabled` and `mfa_age`, minted at
+  `src/api-gateway/internal/session/session.go:438-439` and read back at `:676-687`, where a missing or
+  unparseable `mfa_age` fails CLOSED to the one-year `NeverVerifiedMFAAgeSeconds` sentinel, not 0.
+  ⚠️ **Enforcement is per-operation, not per-account.** Nothing requires an admin to hold a second factor
+  in order to log in: `src/api-gateway/internal/handlers/auth/keycloak.go:948` (`mfaFromIDToken`) counts a
+  login as MFA-verified only when the id_token's `acr` is allow-listed in `freeipa.oidc_mfa_acr_values` or
+  its `amr` intersects `oidc_mfa_amr_values`; anything else yields `NeverVerifiedMFA()` **and the login
+  still succeeds** — `keycloak.go:620-633` mints the session with whatever state that returned. Such a
+  session is then refused every step-up-gated operation (see the step-up row below) unless the
+  deployment-wide opt-out has been taken:
+  `src/api-gateway/internal/db/migrations/0093_super_admin_mfa_policy.sql` seeds the `mfa_policy`
+  singleton whose `second_factor_required` (default TRUE) can disable the gate entirely.
+  `src/api-gateway/internal/config/config.go:868-871` refuses boot if a password-only (LoA1) `acr` alias
+  is allow-listed as MFA.
 - Rate limiting on `/oauth/token`: ✅ RESOLVED. `src/api-gateway/internal/middleware/ratelimit.go` adds `OAuthTokenRateLimiter` (5 req/min per IP+User-Agent, keyed by SHA256(IP+UA)). `OAuthTokenRateLimitMiddleware` is wired into the router in `main.go`. Rate-limit events are emitted as structured audit events. See **TM-06** HANDOFF.
 - Account lockout after N failed attempts: ❓ NOT FOUND. No lockout logic in `src/api-gateway/`. FreeIPA
   may apply its own (not verified in code). This is a gap for the API gateway layer.
@@ -288,9 +312,23 @@ required for sensitive operations.
 - JWT lifetime ≤ 15m: ✅ CONFIRMED. `src/api-gateway/internal/config/config.go` defaults `TTLMinutes: 15`.
   Line 137: `if c.JWT.TTLMinutes == 0 { c.JWT.TTLMinutes = 15 }`.
 - Refresh token bound to IP and User-Agent: ✅ RESOLVED. `src/api-gateway/internal/session/session.go` adds `RefreshTokenStore` with IP+UA binding enforcement. `Validate()` rejects on IP mismatch or UA mismatch. Single-use (consumed after validation). Security events emitted on mismatch (`auth.refresh.fail` with IP and UA). Wired into `auth.TokenHandler` in `src/api-gateway/internal/handlers/auth/token.go`. HTTP-layer integration tests in `src/api-gateway/internal/handlers/auth/token_integration_test.go`. See **TM-07** HANDOFF.
-- MFA step-up for sensitive operations: ✅ CONFIRMED. The `authz.RequireMFA()` middleware is applied to
-  sensitive endpoints (enrollment token creation, policy publish, user modification, SSH CA operations).
-  The OPA decision `adamance.api.authz` returns `mfa_step_up` as an obligation.
+- MFA step-up for sensitive operations: ✅ CONFIRMED — **mechanism corrected 2026-09-01: there is no
+  `authz.RequireMFA()` middleware.** The only `RequireMFA` declared in the tree is
+  `src/api-gateway/internal/handlers/users/handler.go:1624`, an admin action that forces a user to enrol
+  OTP (routed at `src/api-gateway/cmd/server/main.go:4553`) — a different thing entirely. Step-up is
+  enforced by the policy, not by a per-route Go middleware: `policies/api/authz.rego`'s
+  `check_user_with_mfa_stepup` family gates 79 distinct operations, including
+  `machine.create_enrollment_token`, `policy.publish`, `user.update` and `ssh_cert.sign`. A factor older
+  than `step_up_mfa_max_age` (default 300s, `policies/api/authz.rego:3408`) returns the obligation
+  `require_mfa_age_max_seconds` (`policies/api/authz.rego:2582`), which
+  `src/api-gateway/internal/authz/decision.go:268-285` maps to `MFAStepUpRequired`;
+  `src/api-gateway/internal/authz/middleware.go:519-520` then calls `writeStepUp` (`:981`), answering 401
+  `MFA_STEP_UP_REQUIRED` with a `challenge_url`. The middleware is mounted across the authenticated API at
+  `src/api-gateway/cmd/server/main.go:3716` (`rapi.Use(authzMw.Handler)`). ⚠️ Every clause of the gate is
+  conditional on `second_factor_required` (`policies/api/authz.rego:3461`, default true) — the
+  deployment-wide opt-out an operator can write to the `mfa_policy` table. The literal `mfa_step_up`
+  obligation string comes from `governance.require_approval`
+  (`policies/governance/require_approval.rego:154`), not from `adamance.api.authz`.
 
 ---
 
@@ -323,9 +361,23 @@ outside the control plane subnet.
 **As-built:** ⚠️ NOT VERIFIED.
 
 The Docker Compose network configuration was not reviewed in this pass. `docker-compose.yml` was not present
-in the root. The control plane network segmentation is documented in `SECURITY_ARCHITECTURE.md` §Network
-policy but not verified against a running compose file. This should be verified against `deploy/docker-compose.yml`
-or equivalent before first deployment.
+in the root, and no single unified compose file has ever existed — not in the root, not at the top of `deploy/`.
+The installed single-host stack is `deploy/setup/docker-compose.setup.yml`, the `deploy/setup/compose.d/*.yml`
+overlays, and conditionally `deploy/setup/docker-compose.inbox.yml` (when the `.inbox` marker exists) and
+`deploy/setup/docker-compose.tpm.yml` (when the host has a TPM), assembled by `compose_file_args` in
+`deploy/setup/lib/compose.sh`. The control plane network segmentation is documented in
+`SECURITY_ARCHITECTURE.md` §Network policy but not verified against a running compose file. Verify it against
+that stack — whose base file declares one `internal` bridge and publishes exactly two host ports, both
+loopback-bound by default (api-gateway host-mTLS `${ADAMANCE_MTLS_BIND:-127.0.0.1}:8443`, edge
+`127.0.0.1:8453`), whose FreeIPA overlay `deploy/setup/compose.d/20-freeipa.yml` declares no `ports:` at all,
+and whose conditional overrides add none (the in-box override does `ports: !reset []`) — and against
+`deploy/docker-compose.ha.yml`, whose `ipa-replica` publishes seven host ports on all interfaces
+(`81:80`, `444:443`, `390:389`, `637:636`, `89:88/udp`, `465:464/udp`, `124:123/udp`), before first deployment.
+
+⚠ Corrected 2026-09-01: this passage sent the reader to `deploy/docker-compose.yml`, which git has never
+contained. The top of `deploy/` has only ever held per-concern compose files — today `docker-compose.ha.yml`
+(renamed from `docker-compose.t2.yml`), `docker-compose.keycloak.yml` and `docker-compose.siem.yml` — with the
+rest under `deploy/dev/`, `deploy/observability/` and `deploy/setup/`.
 
 ---
 
@@ -802,9 +854,16 @@ HMAC algorithms explicitly rejected. This is the correct implementation.
 #### Password hashing: Argon2id
 **As-built:** ⚠️ NOT VERIFIED IN CODE.
 
-The password hashing for user passwords in FreeIPA is handled by FreeIPA (MIT Kerberos / Dogtag). The
-`configs/crypto.yaml` (referenced in SECURITY_ARCHITECTURE.md) was not reviewed in this pass. The
-golang `golang.org/x/crypto/argon2` package is not directly referenced in the `src/` tree reviewed.
+The password hashing for user passwords in FreeIPA is handled by FreeIPA (MIT Kerberos / Dogtag).
+
+⚠ Corrected 2026-09-01: this passage said `configs/crypto.yaml` "was not reviewed in this pass", which reads as if
+the file exists. It has never existed under any name, so there was nothing to review. The absence finding is also
+stronger than "not directly referenced": `golang.org/x/crypto/argon2` is in no `go.mod` and is imported by no `.go`
+file in the tree. Outside documentation the only `argon2` strings are a shell placeholder
+(`deploy/freeipa/phases/D-first-admin.sh`), the `laRecoveryCodeHash` schema attribute
+(`deploy/freeipa/schema/adamance-schema.ldif`), and a quarantined skeleton test whose own stub hashes with SHA-256
+(`src/common/security/security_test.go`, build tag `security_skeleton`). Argon2id is still specified in eight
+documents, including this one.
 
 **Finding:** TM-22 (RESOLVED) — Audit confirms: no direct password storage in `src/api-gateway/`. All auth delegates to FreeIPA. No bcrypt, scrypt, or argon2 usage found. Compliant by design. See **TM-22** HANDOFF.
 
@@ -825,7 +884,7 @@ golang `golang.org/x/crypto/argon2` package is not directly referenced in the `s
 | TM-09 | Air-gapped installer distribution path               | Document the internal package repo as a V1.5 requirement. V1 acceptable with GitHub Releases. | docs |
 | TM-10 | Host keytab scope in IPA API call | ✅ RESOLVED (M7.1 + M7.3): enrollment handler scopes `host_add` and `ipa-getkeytab` to a single host principal `host/<fqdn>@REALM`. (The multi-tenant/MSP extension is descoped — single-tenant V1; see TM-25.) | api-gateway |
 | TM-11 | SSH CA signing key storage and key ceremony | ✅ RESOLVED: ceremony reviewed; as-built matches docs; checklist present; prod HSM is V1.5. | security |
-| TM-12 | FIM monitoring of adamance agent log paths | Confirm `ossec.conf` generated by `hostconfig/wazuh.go` includes FIM for `/var/log/adamance/`. | client-agent |
+| TM-12 | FIM monitoring of adamance agent log paths | ⚠ Corrected 2026-09-01: this row named `hostconfig/wazuh.go`, which has never existed. The agent's `ossec.conf` is written by `patchOssecConf` in `src/client-agent/internal/wazuh/register.go:219`, which overwrites the file with `<client>`, `<client_buffer>` and `<logging>` only — no `<syscheck>` stanza — and the fragment `writeWazuhConfig` writes (`src/client-agent/internal/enroll/enroll.go:422`) carries only a server address, port, protocol, hostname and enrollment key. So no adamance code emits a FIM watchlist: `policies/fim/policy.rego` would generate one but self-declares NOT WIRED with no runtime consumer, and `/var/log/adamance/` is not among `fim_monitored_paths` in `policies/data/global.json`. Read those two writers to confirm; any FIM of that path would have to come from manager-side config, which this repo does not carry (`deploy/dev/wazuh/config/ossec.conf` leaves syscheck to the image defaults). | client-agent |
 | TM-13 | Sudo command audit via Wazuh syslog/auditd | Host OS-level configuration outside adamance agent scope. Document as a host hardening prerequisite. | docs |
 | TM-14 | Kerberos ticket lifetime enforcement | Verify SSSD config generated by `hostconfig/sssd.go` sets `krb5_lifetime` and per-principal `max_life`. | client-agent |
 | TM-15 | OPA policies default-deny review — IN PROGRESS | Partially done: core API authz, enrollment, SSH, sudo, lib/decision reviewed. Two bugs found and fixed (see below). CIS compliance policies not yet reviewed. Remaining: firewall, fim, data, governance packages. | policies |
