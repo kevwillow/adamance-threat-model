@@ -569,8 +569,12 @@ the agent verifies bundle signatures before applying. Both hold.
 
 What is false: **there is no scoping of any kind.** `src/api-gateway/internal/bundle/bundle.go`'s
 `ServeHTTP` selects a bundle with `switch path.Base(r.URL.Path)`; that switch chooses the bundle
-*kind* (operational, compliance), never the *caller*. `HostIdentityFromContext` is never called
-anywhere in the `bundle` package, so the served bytes cannot depend on who asked. The agent could
+*kind* (operational, compliance), never the *caller*. ⚠️ **Narrowed 2026-09-02:** the `bundle`
+package now does call `HostIdentityFromContext` — at `bundle.go` in `admit()`, which refuses a
+caller whose certificate verifies but whose host is no longer enrolled. That decides **whether**
+to serve, never **what** to serve, so the sentence this replaces (*"never called anywhere in the
+`bundle` package"*) is no longer true while the claim it supported still is: the served bytes do
+not depend on who asked. The agent could
 not request a scoped bundle even if the server offered one: `pull.go` builds one fixed path and
 sends no query parameter. The parenthetical "(path-based or query-parameter-based targeting)" above
 described two mechanisms, neither of which exists.
