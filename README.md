@@ -15,13 +15,12 @@ the model writing the code gets handed it along with the spec.
 These started as the contract. They are now also the record of checking the code against it. Rows
 carry the date they were last verified, and where someone went and looked, the file and the line they
 looked at. A row saying a control is confirmed is a claim about specific source on a specific date,
-so you can see how stale it is before you trust it.
+so you can see exactly what it rests on.
 
 Where the code does not meet a line in here, the line is the requirement and the code is the work.
 
 The source is not public yet, so the file references point somewhere you cannot follow today. They
-are published anyway. When the source opens, every one of them can be checked, including the ones
-that turn out to be wrong.
+are published anyway. When the source opens, every one of them can be checked.
 
 | Document | Edited | Covers |
 | --- | --- | --- |
