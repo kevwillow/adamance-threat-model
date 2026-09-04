@@ -1,6 +1,6 @@
 # Threat Model: agent accounts
 
-> Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which covers the control plane, the hosts
 > and the operators. This one covers the agent principal only: a thing that holds an account here
 > and is not a person.

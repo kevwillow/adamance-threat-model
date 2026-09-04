@@ -1,6 +1,6 @@
 # Threat Model: the installer and the supply chain behind it
 
-> Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md). That one has a single row for "MITM of the
 > install script", which is nowhere near enough for a thing you pipe into a root shell. This is the
 > rest of it.

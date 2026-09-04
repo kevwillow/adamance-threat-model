@@ -1,6 +1,6 @@
 # Threat Model: the network modules, VPN, RADIUS and DNS
 
-> Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md). These three are optional modules, and the
 > main threat model does not mention any of them.
 >
