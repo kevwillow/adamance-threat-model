@@ -1,6 +1,6 @@
 # Threat Model: the audit chain and its off-box copy
 
-> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`, corrected and extended 2026-09-04. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which covers who may do what. This one
 > covers whether you can still prove it afterwards.
 
@@ -84,6 +84,7 @@ chain with no external witness catches a clumsy edit and not a competent one.
 | Rank | Asset | What it costs you |
 | --- | --- | --- |
 | 1 | The HMAC chain key | Rewrite history from any point and re-chain it, and every check passes |
+| 1= | The anchor signing key | ⭐ Added 2026-09-04. Anchors are described throughout this document as signed and this key was in no asset list. Forge an anchor and the one witness that catches a rewritten chain agrees with the rewrite, which collapses row 1 and this row into a single compromise. **If the anchor is signed with the HMAC chain key above, then anyone who can verify an anchor can forge one, and the whole subsystem is worth nothing against A4.** Which key it is, what algorithm, and what a verifier trusts are unstated. See TMA2-07. |
 | 2 | The anchor records | Without them the chain only proves it agrees with itself |
 | 3 | Credentials for the off-box destination | Reach the one copy the attacker is not supposed to own |
 | 4 | The audit database | Destroy or truncate the record locally |
@@ -140,6 +141,10 @@ plus noticing when it stops landing.
 | Audit contents leak to the destination | Yours. Entries carry principals, hostnames and actions, so pick a destination you would be comfortable holding that. The recommendation to start with git is about cost, not confidentiality. | **STATED** |
 | Destination credentials stolen from the control plane | In the A4 case the attacker is already where those credentials live. Anchoring defends against a rewritten local chain, not against someone who owns the control plane and the destination at once. | **ACCEPTED** |
 | Key rotation breaks chain continuity | The anchor records the producing key id, so a rotation is visible rather than a break. Continuity across a rotation is not otherwise designed. | **PARTIAL** |
+| A forged anchor is accepted by a verifier | ⭐ Added 2026-09-04. The signature over an anchor is only worth what the verifier's trust root is worth. Required: a named signing key that is not the HMAC chain key, an asymmetric signature so verifying does not confer forging, a distribution path for the public half that does not run through the box being audited, and a stated recovery if the private half is lost or copied. | **NOT MODELLED** |
+| The local store is destroyed and the record cannot be reconstructed | ⭐ Added 2026-09-04. The anchor proves loss. It does not survive it. Required: a stated position on whether the event stream itself leaves the box, and to which of the four destinations, with the confidentiality consequence stated in the same breath because entries carry principals, hostnames and actions. It is the single largest design gap in this subsystem. | **NOT MODELLED** |
+| A mutation succeeds and its entry never gets written | ⭐ Added 2026-09-04. This chain proves that what was written was not altered. Nothing here proves that everything was written, and an entry that was never appended is indistinguishable from an action that never happened. FreeIPA, Keycloak, Postgres and OPA cannot share a transaction with the audit append. Required: intent recorded before the mutation is attempted, outcome after, an explicit unconfirmed-mutation state when the outcome cannot be confirmed, reconciliation that resolves those states, and an append failure that fails the operation rather than being swallowed. | **NOT MODELLED** |
+| The chain is complete and the clock under it is not | ⭐ Added 2026-09-04. Entry timestamps, anchor liveness and the staleness check that flips tamper protection false all trust a clock nobody authenticated. See TM-26 in the main threat model. | **NOT MODELLED** |
 
 ## What we do not defend against
 
@@ -148,10 +153,20 @@ plus noticing when it stops landing.
   share an account is the answer, and it is your call rather than ours.
 - The security of the destination account. Stated above and repeated here because it is the single
   most important thing to understand about this subsystem.
-- Destruction of what is on the box. That is the premise, not a gap. The answer is that the copy
-  already left.
-- Making the record complete. The chain proves that what was written was not changed. It says nothing
-  about what nobody thought to write.
+- ⚠️ **Corrected 2026-09-04. This read: "Destruction of what is on the box. That is the premise, not
+  a gap. The answer is that the copy already left." That answer is wrong in this document's own
+  terms.** What leaves is the chain head, not the entries. So destruction of the local store is
+  *detectable* and not *recoverable*: the anchor proves that a record existed and is gone, and cannot
+  tell you what was in it. An anchor is a witness. It is not a copy of the record, and the sentence
+  above quietly promised that it was. Preserving the events themselves off the box is a separate
+  requirement, it is technically possible with the four destinations already designed, and it is now
+  tracked as TMA2-06 rather than being answered by a sentence.
+- Making the record complete *by choosing what to record*. The chain proves that what was written was
+  not changed. It says nothing about what nobody thought to write. ⚠️ **Extended 2026-09-04: that is a
+  statement about coverage and it was being read as covering atomicity too, which it does not.** An
+  action nobody instrumented and an action that was instrumented, executed, and then failed to append
+  look identical from here. The first is a scope decision. The second is a bug this document now
+  requires a control for, above.
 
 ## Still open
 
@@ -161,6 +176,10 @@ plus noticing when it stops landing.
 | TMA2-02 | The setup prompt is being built | Install and first admin setup should recommend a destination without gating on it. |
 | TMA2-03 | No rollback or replay protection on anchors | Nothing requires anchor sequences to advance, and unlike the destination rows this one is ours to fix. |
 | TMA2-04 | A local read-only witness is unexplored | A USB device that adamance unlocks, writes and re-locks would give a default install a witness with no account and no network. Recorded as a question rather than a plan. |
+| TMA2-06 | An anchor witnesses, it does not preserve | ⭐ 2026-09-04. Only the chain head leaves. Destroy the local store and you can prove something is gone and not say what it was. Shipping the event stream off-box is possible with the destinations already designed and no position has been taken on it. |
+| TMA2-07 | The anchor signing key has no trust root | ⭐ 2026-09-04. Anchors are called signed throughout and the key, algorithm, distribution, rotation and compromise recovery are named nowhere. If it is the HMAC chain key, verification and forgery are the same capability. |
+| TMA2-08 | Audit completeness is not atomicity | ⭐ 2026-09-04. A cross-system mutation that lands while its audit append fails leaves a valid chain that is missing an event, and nothing reconciles that. |
+| TMA2-09 | Anchor timestamps trust an unauthenticated clock | ⭐ 2026-09-04. Liveness and staleness are time-based and the time source is not a boundary anyone has described. See TM-26. |
 | TMA2-05 | WORM verification is unspecified | Object locking is the strongest destination on offer and nothing states how we confirm it is actually on. |
 
 ## Where this came from

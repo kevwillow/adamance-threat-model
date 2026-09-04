@@ -1,6 +1,6 @@
 # Threat Model: session recording
 
-> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`, corrected and extended 2026-09-04. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md) and
 > [`THREAT_MODEL_audit_anchoring.md`](THREAT_MODEL_audit_anchoring.md). The audit chain records
 > that something was allowed. Recording is what shows you what was then done with it.
@@ -47,6 +47,16 @@ reads as not engaged, so the failure direction is toward refusing sessions rathe
 
 Engaging it is a visible event, not a quiet one. The transition is audited as
 `iam.machine.break_glass.engaged` and it pages (`src/api-gateway/internal/machines/handler.go:1536`).
+
+⚠️ **Added 2026-09-04: that paging is conditional on reaching the gateway, and break-glass exists for
+the case where reaching things is exactly what has stopped working.** The audit event and the page are
+produced on the control plane. Root creates the sentinel on the host. If the spool is dead because the
+network or the gateway is down — the ordinary reason a spool goes undurable — then the host engages
+break-glass, sessions run unrecorded, and nothing pages until connectivity returns, if it returns.
+Required: a durable local record of the engagement that the host must later reconcile with the control
+plane, an alert on a reconciliation that arrives late or never arrives, and this paragraph saying out
+loud that immediate paging is conditional on connectivity rather than implying it is not. Tracked as
+TMSR-06.
 
 And the thing worth saying plainly: creating that file needs root on the host. Somebody with root on
 that host could equally just kill the recorder. Break-glass does not hand them a capability they did
@@ -99,6 +109,7 @@ the machine and can reach the ingest socket.
 | Exhaust the collector so other operators lose capture | 🚨 The ingest socket is `0666` by design, so any local user can connect (`src/client-agent/internal/recorder/collector.go:73`). A global connection cap alone would be worse than useless, since one user could eat the whole budget, so there is a per-UID cap as well and that is the control that matters. | **BUILT** |
 | Degrade a third party's capture anyway | ⚠️ Named as the real residue in the code and deliberately not papered over. When the collector is unreachable a recorder falls back to its own operator-deletable spool, and closing that needs a sender-side design decision rather than a socket option. | **OPEN, acknowledged** |
 | Forge content into somebody else's transcript | The sender is authenticated by `SO_PEERCRED` and cannot be spoofed, so a document is attributable to the UID that sent it. The content itself is unauthenticated in transit, which is why the gateway is the only signer. | **PARTIAL, by design** |
+| Forge content into your *own* transcript | ⭐ Added 2026-09-04, and it is the residue the row above leaves. `SO_PEERCRED` authenticates a kernel-reported UID. It does not authenticate a session, and it does not authenticate that the bytes were ever on anybody's terminal. Any process running as that UID — including one the operator started precisely for this — can submit a document that will be signed by the gateway and replayed as a session. The gateway's signature proves what the gateway received. It does not prove what appeared on the terminal, and this document has been treating those as the same claim. Required: a session nonce the server issues at connect and the recorder cannot choose, ordered chunks under that nonce, explicit start and end markers, durable acknowledgement of each chunk, and a stored status of `incomplete` when the end marker never arrives, so a truncated capture reads as truncated rather than as a short session. | **NOT MODELLED** |
 
 ### After capture
 
@@ -126,6 +137,8 @@ the machine and can reach the ingest socket.
 | TMSR-02 | Third-party capture degradation | Acknowledged in the code as needing a sender-side design decision. |
 | TMSR-03 | No redaction | Whatever is typed is captured, including things that should never be stored. |
 | TMSR-04 | Retention and deletion of recordings | Undescribed, and they are bulkier and more sensitive than audit entries. |
+| TMSR-06 | Break-glass paging depends on the connectivity break-glass exists for | ⭐ 2026-09-04. The page comes from the control plane and the sentinel is created on the host. During a network or gateway outage nothing pages, which is the case break-glass is for. |
+| TMSR-07 | A transcript is bound to a UID and not to a session | ⭐ 2026-09-04. `SO_PEERCRED` proves which UID sent bytes. Any process under that UID can send any bytes. No session nonce, no ordering, no end marker, no incomplete status. |
 | TMSR-05 | Playback rendering is untrusted input | A transcript replayed in a browser is attacker-influenced content. |
 
 ## Where this came from

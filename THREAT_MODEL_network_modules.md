@@ -1,6 +1,6 @@
 # Threat Model: the network modules, VPN, RADIUS and DNS
 
-> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`, extended 2026-09-04. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md). These three are optional modules, and the
 > main threat model does not mention any of them.
 >
@@ -51,7 +51,7 @@ read is only correct while writes are the only way rows appear.
 | --- | --- | --- |
 | A client row names a path and exfiltrates another secret | `secret_ref` is a name, re-validated at resolution. | **BUILT** |
 | Shared secret stolen from a switch or an AP | Not modelled. A RADIUS shared secret sits in the config of a device you often do not control, and the protocol's own protection of it is weak. Rotation is undescribed. | **NOT MODELLED** |
-| RADIUS over plain UDP on an untrusted segment | Not modelled. Nothing states whether RadSec or a tunnel is required, or what happens on a flat network. | **NOT MODELLED** |
+| RADIUS over plain UDP on an untrusted segment | ⭐ Required control written 2026-09-04, where this row previously said only "not modelled". RADIUS over TLS (RadSec) or an equivalent tunnel is required on any segment adamance does not control. Where legacy UDP or TCP transport remains, `Message-Authenticator` is mandatory on every packet in both directions and a packet without it is dropped: without it the MD5-based construction leaves requests forgeable and replayable, which is the subject of RFC 9765, and RADIUS/1.1 removes that protection entirely rather than repairing it. The permitted EAP methods are stated rather than left to whatever the server ships with. | **NOT BUILT**, requirement now stated |
 | Offline attack on the RADIUS authenticator | Not modelled. This is the well-known weakness of the older protocol modes and it depends on which EAP methods are permitted, which nothing records. | **NOT MODELLED** |
 | A device is deleted in the console but keeps authenticating | Convergence and heartbeat handlers exist so drift is at least observable (`src/api-gateway/internal/handlers/radius/heartbeat.go`). Whether removal is enforced promptly is undescribed. | **PARTIAL** |
 | Client config shipped to the wrong host | ⚠️ Unlike the directory bind credential in `adsecrets`, a RADIUS secret is deliberately **not** bound to one destination endpoint, because a RADIUS client legitimately has more than one. That is a reasoned decision, and it does mean the binding control that exists elsewhere is absent here. | **ACCEPTED, by design** |
@@ -110,7 +110,7 @@ and nothing in adamance would notice or say so.
 | TMN-01 | No resolver exists | A filtering policy can be saved and filters nothing. |
 | TMN-02 | Encrypted DNS bypass is undescribed | Decides whether the feature is meaningful at all once it exists. |
 | TMN-03 | RADIUS shared-secret lifecycle | Storage on the device, rotation, and revocation are all undescribed. |
-| TMN-04 | RADIUS transport posture | Nothing states whether RadSec or a tunnel is required. |
+| TMN-04 | RADIUS transport posture | ⭐ Updated 2026-09-04: the requirement is now stated — RadSec on untrusted segments, `Message-Authenticator` mandatory wherever legacy transport remains, permitted EAP methods written down. None of it is built or configured, and nothing refuses a client that omits it. |
 | TMN-05 | The VPN perimeter is an unverified assumption | Several main-threat-model rows depend on it and nothing checks it holds. |
 
 ## Where this came from
