@@ -9,7 +9,7 @@
 
 ## What this is for
 
-On the host groups where you turn it on, a privileged session is captured, signed and replayable. The
+On the host groups where you turn it on, a privileged session is captured, signed and replayable. ⚠️ **Build status, 2026-09-04: capture and signing are built, playback is not.** The player component is placed on the console page and never loaded, so a recorded session cannot currently be watched. That makes every row in this document about *reading* a recording a statement about the authorization path rather than about a working viewer, and it is why TMSR-05 is written as a requirement. The
 strong version of the claim is that if it is not recording, it is not happening: the session is
 refused rather than allowed to run uncaptured.
 
