@@ -23,9 +23,9 @@ The source is not public yet, so the file references point somewhere you cannot 
 are published anyway. When the source opens, every one of them can be checked, including the ones
 that turn out to be wrong.
 
-| Document | Last edited | Covers |
+| Document | Edited | Covers |
 | --- | --- | --- |
-| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-09-02 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
+| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-05-24 to 2026-09-02 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
 | [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
 | [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 | The installer and the supply chain behind it, including the part nobody can engineer away. |
 | [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 | The audit chain and the copy that leaves the box. |
@@ -34,7 +34,8 @@ that turn out to be wrong.
 | [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
 | [THREAT_MODEL_ad_integration.md](THREAT_MODEL_ad_integration.md) | 2026-09-01 | Keeping the Active Directory you already run. |
 
-The date is when each document was last edited. Each file repeats it in its own header.
+The control plane model has been in revision since May 2026 and its header lists every review date.
+The seven subsystem models were added on 2026-09-01. Each file repeats its own dates in its header.
 
 ## Read the corrections first
 
