@@ -252,7 +252,7 @@ it held is still in the authoritative table verbatim.
 | ---------- | ------------- | ------ |
 | 2026-05-24 | Initial draft | - |
 | 2026-05-26 | Second pass against as-built system (M5 complete). ⚠️ Corrected 2026-09-02: this row read "Verified all required controls are implemented", which the same pass disproves on its own pages. It found violations, stubs and missing implementations, and later passes found more. The claim is left quoted rather than deleted, because a false assurance in a revision history is exactly the kind of thing later readers trust without re-checking. Added TM-06 through TM-10. |,      |
-| 2026-07-11 | V1 verification pass; re-verified every contested TM item against live source (see the ⭐ section at top). Fixed 2 real residuals (client-agent join TLS 1.2→1.3; Keycloak brute-force protection). Reconciled the stale 2026-05-26 narrative vs. the resolution table. Fixed malformed markdown in the Revision-history + Open-decisions tables. Descoped TM-25 (multi-tenancy removed for V1). | Claude (Opus) |
+| 2026-07-11 | V1 verification pass; re-verified every contested TM item against live source (see the ⭐ section at top). Fixed 2 real residuals (client-agent join TLS 1.2→1.3; Keycloak brute-force protection). Reconciled the stale 2026-05-26 narrative vs. the resolution table. Fixed malformed markdown in the Revision-history + Open-decisions tables. Descoped TM-25 (multi-tenancy removed for V1). | project maintainer |
 | 2026-08-31 | Bundle-scoping row refuted. It had read "✅ CONFIRMED / Finding: NONE" and nothing implemented the control. Corrected in place with the false text quoted. | - |
 | 2026-09-01 | Correction pass over MFA, step-up mechanism, FIM (TM-12) and the crypto-config passage. Several rows had named files and middleware that have never existed in this repository. | - |
 | 2026-09-02 | Reconciliation pass. Removed the internal precedence rule that told readers which half of this document to believe. Corrected the LDAP/Kerberos exposure row against the shipped HA compose (G85), the dual-control approver count (one approver by default, not two), and the audit-log row that credited unwired Wazuh FIM. Added the post-quantum key-exchange baseline, which was built and undocumented. Fixed a false assurance in the 2026-05-26 revision-history row. Seven subsystem threat models split out and linked from the header. | project maintainer |
@@ -570,7 +570,7 @@ the agent verifies bundle signatures before applying. Both hold.
 What is false: **there is no scoping of any kind.** `src/api-gateway/internal/bundle/bundle.go`'s
 `ServeHTTP` selects a bundle with `switch path.Base(r.URL.Path)`; that switch chooses the bundle
 *kind* (operational, compliance), never the *caller*. ⚠️ **Narrowed 2026-09-02:** the `bundle`
-package now does call `HostIdentityFromContext` — at `bundle.go` in `admit()`, which refuses a
+package now does call `HostIdentityFromContext` at `bundle.go` in `admit()`, which refuses a
 caller whose certificate verifies but whose host is no longer enrolled. That decides **whether**
 to serve, never **what** to serve, so the sentence this replaces (*"never called anywhere in the
 `bundle` package"*) is no longer true while the claim it supported still is: the served bytes do
