@@ -1,14 +1,14 @@
 # Threat Model: the network modules, VPN, RADIUS and DNS
 
 > Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
-> Companion to [`docs/THREAT_MODEL.md`](THREAT_MODEL.md). These three are optional modules, and the
+> Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md). These three are optional modules, and the
 > main threat model does not mention any of them.
 >
 > ⚠️ **Build status up front.** RADIUS has real code and the most interesting security work in this
 > document. DNS filtering has a built control-plane half and **no resolver process at all**, so an
 > operator can save a filtering policy that filters nothing: the shipped blocklist catalogue is
 > literally empty (`src/modules/dns/blocklist/catalogue.go:29`, `func Shipped() Catalogue { return
-> Catalogue{} }`). Tracked as G02 and G18 in [`docs/V1_GAP_REGISTRY.md`](V1_GAP_REGISTRY.md).
+> Catalogue{} }`). Tracked as open gaps.
 
 ---
 
@@ -107,7 +107,7 @@ and nothing in adamance would notice or say so.
 
 | ID | Item | Why it is still open |
 | --- | --- | --- |
-| TMN-01 | No resolver exists | G02 and G18. A filtering policy can be saved and filters nothing. |
+| TMN-01 | No resolver exists | A filtering policy can be saved and filters nothing. |
 | TMN-02 | Encrypted DNS bypass is undescribed | Decides whether the feature is meaningful at all once it exists. |
 | TMN-03 | RADIUS shared-secret lifecycle | Storage on the device, rotation, and revocation are all undescribed. |
 | TMN-04 | RADIUS transport posture | Nothing states whether RadSec or a tunnel is required. |
@@ -115,7 +115,5 @@ and nothing in adamance would notice or say so.
 
 ## Where this came from
 
-[`docs/DESIGN_dns.md`](DESIGN_dns.md), [`docs/DESIGN_radius_deployment.md`](DESIGN_radius_deployment.md),
-[`docs/DESIGN_vpn_client_profiles.md`](DESIGN_vpn_client_profiles.md). Code:
-`src/api-gateway/internal/radiussecrets/radiussecrets.go`, `src/modules/dns/blocklist/catalogue.go`,
+Code: `src/api-gateway/internal/radiussecrets/radiussecrets.go`, `src/modules/dns/blocklist/catalogue.go`,
 `src/api-gateway/internal/handlers/dns/handler.go`.

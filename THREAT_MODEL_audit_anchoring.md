@@ -1,7 +1,7 @@
 # Threat Model: the audit chain and its off-box copy
 
 > Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
-> Companion to [`docs/THREAT_MODEL.md`](THREAT_MODEL.md), which covers who may do what. This one
+> Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which covers who may do what. This one
 > covers whether you can still prove it afterwards.
 
 ---
@@ -70,8 +70,7 @@ than a git account with its own key, and neither is as strong as a locked object
 ⚠️ **Build status.** The four destinations are v1 scope and are being built now, alongside the setup
 prompt described below. The sink model in the tree today has one value, `anchorSinkWazuh = "wazuh"`
 (`src/api-gateway/cmd/server/main.go:5984`), so treat every destination row below as the shape v1
-ships rather than as something you can point at in the current build. Tracked as G82 in
-[`docs/V1_GAP_REGISTRY.md`](V1_GAP_REGISTRY.md).
+ships rather than as something you can point at in the current build. Tracked as an open gap.
 
 ### Setting one up
 
@@ -158,15 +157,14 @@ plus noticing when it stops landing.
 
 | ID | Item | Why it is still open |
 | --- | --- | --- |
-| TMA2-01 | The four destinations are being built | Git, email, SSH or SCP and object storage are v1 scope. The tree has one sink today. G82. |
-| TMA2-02 | The setup prompt is being built | Install and first admin setup should recommend a destination without gating on it. G83. |
+| TMA2-01 | The four destinations are being built | Git, email, SSH or SCP and object storage are v1 scope. The tree has one sink today. |
+| TMA2-02 | The setup prompt is being built | Install and first admin setup should recommend a destination without gating on it. |
 | TMA2-03 | No rollback or replay protection on anchors | Nothing requires anchor sequences to advance, and unlike the destination rows this one is ours to fix. |
-| TMA2-04 | A local read-only witness is unexplored | A USB device that adamance unlocks, writes and re-locks would give a default install a witness with no account and no network. Recorded as a question rather than a plan. G84. |
+| TMA2-04 | A local read-only witness is unexplored | A USB device that adamance unlocks, writes and re-locks would give a default install a witness with no account and no network. Recorded as a question rather than a plan. |
 | TMA2-05 | WORM verification is unspecified | Object locking is the strongest destination on offer and nothing states how we confirm it is actually on. |
 
 ## Where this came from
 
-[`docs/DESIGN_AUDIT_IMMUTABILITY.md`](DESIGN_AUDIT_IMMUTABILITY.md) for the design and its own
-honesty about what was unbacked, plus the code named above:
-`src/api-gateway/internal/storage/auditchain/store.go`, `src/common/audit/chain.go`,
+The code named above: `src/api-gateway/internal/storage/auditchain/store.go`,
+`src/common/audit/chain.go`,
 `src/api-gateway/internal/handlers/compliance/auditstate.go`.

@@ -1,7 +1,7 @@
 # Threat Model: the installer and the supply chain behind it
 
 > Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
-> Companion to [`docs/THREAT_MODEL.md`](THREAT_MODEL.md). That one has a single row for "MITM of the
+> Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md). That one has a single row for "MITM of the
 > install script", which is nowhere near enough for a thing you pipe into a root shell. This is the
 > rest of it.
 
@@ -69,7 +69,7 @@ they pull. adamance is a thin layer over other people's code and this is where m
 | Control-plane installer | Container registry | `@sha256` digest pins, cosign on the box | **BUILT** |
 | Agent installer | Gateway binary endpoint | Ed25519 over the artifact, verified server side | **BUILT** |
 | Gateway | Its own artifact directory | Detached `.sig` per artifact, K-06 key | **BUILT** |
-| Release workflow | Signing key | ⚠️ Only the committed dev key has ever been used | **OPEN, G17 and G23** |
+| Release workflow | Signing key | ⚠️ Only the committed dev key has ever been used | **OPEN** |
 
 ## Vectors and controls
 
@@ -86,7 +86,7 @@ they pull. adamance is a thin layer over other people's code and this is where m
 
 | Vector | Control | Status |
 | --- | --- | --- |
-| Release signed with a key anyone can clone | ⚠️ **Not held.** Every release built so far used the committed dev key. G17 and G23 in [`docs/V1_GAP_REGISTRY.md`](V1_GAP_REGISTRY.md) carry this, and G23 is the single gate to a shippable release. Until a production key exists, the entire Ed25519 chain above roots in a key that ships in the repository. | **OPEN** |
+| Release signed with a key anyone can clone | ⚠️ **Not held.** Every release built so far used the committed dev key. Two open gaps carry this, and one of them is the single gate to a shippable release. Until a production key exists, the entire Ed25519 chain above roots in a key that ships in the repository. | **OPEN** |
 | CI account or workflow compromise | Nothing. No provenance attestation, no two-party release, no reproducible build. `scripts/sign-agent-binaries.sh` signs whatever is staged in `dist/`. | **DESIGNED at best** |
 | Downgrade to an older release that was signed and is now known bad | Nothing. A signature says we made it, never that it is still the one you should run. No version floor, no revocation of a published artifact. | **NOT MODELLED** |
 | Upstream image or dependency compromise | Images pinned by `@sha256`, weekly Trivy scan with a blocking threshold, cosign-verified digests at setup. That bounds substitution. It does nothing about a malicious change upstream that gets a legitimate digest. | **PARTIAL** |
@@ -111,7 +111,7 @@ they pull. adamance is a thin layer over other people's code and this is where m
 
 | ID | Item | Why it is still open |
 | --- | --- | --- |
-| TMI-01 | No production signing key has ever been used | G23. Every artifact so far is signed with the key in the repo, so the chain is presentational until custody exists. |
+| TMI-01 | No production signing key has ever been used | Every artifact so far is signed with the key in the repo, so the chain is presentational until custody exists. |
 | TMI-02 | The public claim is wider than the control | The site says the installer checks the signature on everything it fetches. The script it fetched is not checked and cannot be. |
 | TMI-03 | `agent_binary` is missing from the shipped prod config | `configs/api-gateway/api-gateway.dev.yml:230` sets `serve_dir` and `pubkey_file`. The prod config has no `agent_binary` block and `deploy/setup/install.sh` never writes one, so a stock production gateway 503s the one-line agent install. Fails closed, which is right, but the second of the two advertised steps does not work. |
 | TMI-04 | No release provenance | Nothing attests which commit, which runner, or which inputs produced an artifact. |
@@ -120,7 +120,4 @@ they pull. adamance is a thin layer over other people's code and this is where m
 
 ## Where this came from
 
-[`docs/INSTALLER_DESIGN.md`](INSTALLER_DESIGN.md),
-[`docs/DESIGN_one_line_installer.md`](DESIGN_one_line_installer.md),
-[`docs/SECRETS_AND_PKI.md`](SECRETS_AND_PKI.md), and the code named in the tables above.
-Signing: `scripts/sign-agent-binaries.sh`. Verification: `src/common/bundleverify/verify.go`.
+The code named in the tables above. Signing: `scripts/sign-agent-binaries.sh`. Verification: `src/common/bundleverify/verify.go`.
