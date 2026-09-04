@@ -1,9 +1,9 @@
 # Threat Model: Active Directory integration
 
 > Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
-> Companion to [`docs/THREAT_MODEL.md`](THREAT_MODEL.md), which has no Active Directory boundary in
+> Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which has no Active Directory boundary in
 > it. This is about keeping the directory you already run, not about
-> [`docs/THREAT_MODEL_samba_ad_dc.md`](THREAT_MODEL_samba_ad_dc.md), where adamance becomes the
+> [`THREAT_MODEL_samba_ad_dc.md`](THREAT_MODEL_samba_ad_dc.md), where adamance becomes the
 > domain instead.
 
 ---
@@ -119,9 +119,7 @@ have granted themselves something over here.
 
 ## Where this came from
 
-[`docs/DESIGN_ad_setup_wizard.md`](DESIGN_ad_setup_wizard.md) §7 for the re-enrolment requirement,
-[`docs/FOREST_AND_TRUST.md`](FOREST_AND_TRUST.md),
-[`docs/PLAN_ad_module_slice1.md`](PLAN_ad_module_slice1.md). Code:
+Code:
 `src/api-gateway/internal/adsecrets/bindsecret.go`,
 `src/api-gateway/internal/handlers/ad/identitysource.go`,
 `src/api-gateway/internal/handlers/ad/apply.go`.

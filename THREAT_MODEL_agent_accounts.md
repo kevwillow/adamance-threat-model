@@ -1,7 +1,7 @@
 # Threat Model: agent accounts
 
 > Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
-> Companion to [`docs/THREAT_MODEL.md`](THREAT_MODEL.md), which covers the control plane, the hosts
+> Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which covers the control plane, the hosts
 > and the operators. This one covers the agent principal only: a thing that holds an account here
 > and is not a person.
 >
@@ -116,7 +116,7 @@ reads and there never will be. Everything else is built so that row stops matter
 | Vector | Control | Status |
 | --- | --- | --- |
 | The agent enumerates your directory or your fleet | Read access is a grant like any other. No directory enumeration, no hosts outside scope, no reading anyone else's audit entries. | **DESIGNED** |
-| The agent reads fleet-wide data nobody granted it | ⚠️ **Not held today.** G75 in [`docs/V1_GAP_REGISTRY.md`](V1_GAP_REGISTRY.md): policy bundles are not scoped per caller, so anything that can read a bundle on an enrolled host reads every host's name, host group and SSH approval tier. An agent on that host gets it too. This contradicts the row above it, so it closes before agent accounts ship. | **OPEN, tracked** |
+| The agent reads fleet-wide data nobody granted it | ⚠️ **Not held today.** Policy bundles are not scoped per caller, so anything that can read a bundle on an enrolled host reads every host's name, host group and SSH approval tier. An agent on that host gets it too. This contradicts the row above it, so it closes before agent accounts ship. | **OPEN, tracked** |
 
 ### Recording and attribution
 
@@ -148,17 +148,12 @@ reads and there never will be. Everything else is built so that row stops matter
 | ID | Item | Why it is still open |
 | --- | --- | --- |
 | TMA-01 | No producer | `mapSessionSubjectType` takes only `"user"`. Until something can mint an agent subject, every DESIGNED row is unexercised and every BUILT row guards a door nobody can reach. |
-| TMA-02 | G75 undercuts the read surface | An agent on an enrolled host reads fleet-wide host maps whatever its grant says. Closes before agent accounts ship. |
+| TMA-02 | An open gap undercuts the read surface | An agent on an enrolled host reads fleet-wide host maps whatever its grant says. Closes before agent accounts ship. |
 | TMA-03 | Rate limits and kill switch are unmeasured | Both are on the public site. No thresholds, no storage, no revocation path is written down anywhere yet. |
 | TMA-04 | Approval fatigue is unbounded | Nothing limits how often an agent may ask. |
 | TMA-05 | Sponsor compromise has no control | A7 has nothing technical above it. Recorded rather than solved. |
 
 ## Where this came from
 
-Design corpus: [`docs/DESIGN_agent_as_subject.md`](DESIGN_agent_as_subject.md) for the type fence and
-its rulings, [`docs/DESIGN_agent_account.md`](DESIGN_agent_account.md),
-[`docs/DESIGN_agent_permission_grants.md`](DESIGN_agent_permission_grants.md),
-[`docs/DESIGN_agent_runtime.md`](DESIGN_agent_runtime.md),
-[`docs/DESIGN_agent_run_visibility.md`](DESIGN_agent_run_visibility.md).
 Fence tests: `src/api-gateway/internal/middleware/subjecttypefence_test.go`,
 `src/api-gateway/internal/middleware/privilegepredicatefence_test.go`.

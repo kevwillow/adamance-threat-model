@@ -1,7 +1,7 @@
 # Threat Model: the Samba AD DC module
 
 > Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
-> Companion to [`docs/THREAT_MODEL.md`](THREAT_MODEL.md), which has no Windows client and no Samba
+> Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which has no Windows client and no Samba
 > boundary in it at all. This fills that in.
 >
 > ⚠️ **Read the build status first, because it changes what every row below means.** The plan and
@@ -10,7 +10,7 @@
 > the executor and is turned away by the executor's own check
 > (`src/api-gateway/internal/handlers/sambaplan/executor.go:158`). The status observer is
 > deliberately nil, so the screen that should report domain state answers "unknown" in every shipped
-> build. Both are tracked as G07 in [`docs/V1_GAP_REGISTRY.md`](V1_GAP_REGISTRY.md). Nothing here has
+> build. Both are tracked as an open gap. Nothing here has
 > ever run against a real domain controller.
 
 ---
@@ -102,7 +102,7 @@ that runs the module is the box that holds the forest.
 | `SYSVOL` and `NETLOGON` content that clients execute | none. Nothing describes who may write there or what integrity it has. | **NOT MODELLED** |
 | Machine account takeover, including the well-known abuse of machine account creation quota | none | **NOT MODELLED** |
 | DNS poisoning against domain clients | none | **NOT MODELLED** |
-| Exposed DC ports | Nothing specific to this module. Note G85: the HA compose already publishes directory ports on all interfaces, and a DC placement would compound that. | **NOT MODELLED** |
+| Exposed DC ports | Nothing specific to this module. Note that the HA compose already publishes directory ports on all interfaces, and a DC placement would compound that. | **NOT MODELLED** |
 
 ### Two directories, one identity
 
@@ -124,20 +124,15 @@ that runs the module is the box that holds the forest.
 
 | ID | Item | Why it is still open |
 | --- | --- | --- |
-| TMSA-01 | Execution is unwired | Nobody holds the administrator credential and no ruling says who should. G07. |
-| TMSA-02 | Status is dark | The observer is nil in every shipped build, so operators cannot see domain state at all. G07. |
+| TMSA-01 | Execution is unwired | Nobody holds the administrator credential and no ruling says who should. |
+| TMSA-02 | Status is dark | The observer is nil in every shipped build, so operators cannot see domain state at all. |
 | TMSA-03 | Never run against a real DC | The executor wants a root-owned helper at a fixed path that no CI runner provides, so the whole execute path is unexercised. |
 | TMSA-04 | The entire Windows protocol surface | Everything in the second table above. This is the largest single unmodelled area in the product. |
 | TMSA-05 | No FreeIPA-to-Samba reconciliation story | Two directories, and nothing says which wins or how they are kept honest. |
-| TMSA-06 | Placement is a security decision with no security write-up | Where the DC sits decides what is reachable, and G85 shows the HA compose already binds directory ports widely. |
+| TMSA-06 | Placement is a security decision with no security write-up | Where the DC sits decides what is reachable, and the HA compose already binds directory ports widely. |
 
 ## Where this came from
 
-[`docs/DESIGN_samba_ad_dc.md`](DESIGN_samba_ad_dc.md),
-[`docs/DESIGN_samba_mode_b.md`](DESIGN_samba_mode_b.md),
-[`docs/DESIGN_samba_b1_placement.md`](DESIGN_samba_b1_placement.md),
-[`docs/DESIGN_samba_b2_producer.md`](DESIGN_samba_b2_producer.md),
-[`docs/DESIGN_samba_plan_approval.md`](DESIGN_samba_plan_approval.md).
 Helper: `src/modules/samba/cmd/adamance-dchelper/doc.go`. Executor:
 `src/api-gateway/internal/handlers/sambaplan/executor.go`. Status:
 `src/api-gateway/internal/handlers/sambastatus/handler.go`.
