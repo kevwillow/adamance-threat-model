@@ -1,7 +1,6 @@
 # adamance threat models
 
-The security contract adamance is built to meet, published before the code so the standard cannot be
-quietly rewritten afterwards to match whatever got built.
+The security contract adamance is built to meet, published before the code that has to meet it.
 
 **adamance** is self-hosted identity, access and audit for Linux. One console for logins, for what
 each person may touch, and for a record of what they did, from a single machine to a fleet. Built on
