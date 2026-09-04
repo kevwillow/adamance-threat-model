@@ -1,6 +1,6 @@
 # Threat Model: the audit chain and its off-box copy
 
-> Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which covers who may do what. This one
 > covers whether you can still prove it afterwards.
 

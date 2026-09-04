@@ -1,6 +1,6 @@
 # Threat Model: the Samba AD DC module
 
-> Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which has no Windows client and no Samba
 > boundary in it at all. This fills that in.
 >

@@ -1,6 +1,6 @@
 # Threat Model: session recording
 
-> Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md) and
 > [`THREAT_MODEL_audit_anchoring.md`](THREAT_MODEL_audit_anchoring.md). The audit chain records
 > that something was allowed. Recording is what shows you what was then done with it.

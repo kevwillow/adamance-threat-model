@@ -1,6 +1,6 @@
 # Threat Model: Active Directory integration
 
-> Status: **DRAFT, first pass, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which has no Active Directory boundary in
 > it. This is about keeping the directory you already run, not about
 > [`THREAT_MODEL_samba_ad_dc.md`](THREAT_MODEL_samba_ad_dc.md), where adamance becomes the

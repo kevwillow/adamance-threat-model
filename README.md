@@ -23,19 +23,18 @@ The source is not public yet, so the file references point somewhere you cannot 
 are published anyway. When the source opens, every one of them can be checked, including the ones
 that turn out to be wrong.
 
-| Document | Status | Covers |
+| Document | Last edited | Covers |
 | --- | --- | --- |
-| [THREAT_MODEL.md](THREAT_MODEL.md) | Reviewed 2026-09-02 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
-| [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | First pass, 2026-09-01 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
-| [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | First pass, 2026-09-01 | The installer and the supply chain behind it, including the part nobody can engineer away. |
-| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | First pass, 2026-09-01 | The audit chain and the copy that leaves the box. |
-| [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | First pass, 2026-09-01 | Recording privileged sessions, and the one deliberate exception. |
-| [THREAT_MODEL_samba_ad_dc.md](THREAT_MODEL_samba_ad_dc.md) | First pass, 2026-09-01 | The optional module that makes adamance the domain itself. |
-| [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | First pass, 2026-09-01 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
-| [THREAT_MODEL_ad_integration.md](THREAT_MODEL_ad_integration.md) | First pass, 2026-09-01 | Keeping the Active Directory you already run. |
+| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-09-02 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
+| [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
+| [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 | The installer and the supply chain behind it, including the part nobody can engineer away. |
+| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 | The audit chain and the copy that leaves the box. |
+| [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | 2026-09-01 | Recording privileged sessions, and the one deliberate exception. |
+| [THREAT_MODEL_samba_ad_dc.md](THREAT_MODEL_samba_ad_dc.md) | 2026-09-01 | The optional module that makes adamance the domain itself. |
+| [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
+| [THREAT_MODEL_ad_integration.md](THREAT_MODEL_ad_integration.md) | 2026-09-01 | Keeping the Active Directory you already run. |
 
-Seven of the eight were written in one sitting on 2026-09-01 and nobody has been back through them
-since. Each says so in its own header. The column repeats it here so you can see it before you click.
+The date is when each document was last edited. Each file repeats it in its own header.
 
 ## Read the corrections first
 
