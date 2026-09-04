@@ -1,6 +1,6 @@
 # Threat Model: agent accounts
 
-> Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> Status: **DRAFT, written 2026-09-01** against `b276339c`, corrected and extended 2026-09-04. Owner: project maintainer.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which covers the control plane, the hosts
 > and the operators. This one covers the agent principal only: a thing that holds an account here
 > and is not a person.
@@ -108,7 +108,8 @@ reads and there never will be. Everything else is built so that row stops matter
 | Vector | Control | Status |
 | --- | --- | --- |
 | A long-lived token sits in a config file waiting to be copied | No password, no console sign-in, no static API token. Certificates only, shorter than a person's, issued against the identity of the enrolled machine it runs on. | **DESIGNED** |
-| Someone steals the credential and uses it elsewhere | The certificate is bound to the host, so what they stole is worth minutes, on one box, for one scope. | **DESIGNED** |
+| Someone steals the credential and uses it elsewhere | ⚠️ **Corrected 2026-09-04. This read "The certificate is bound to the host, so what they stole is worth minutes, on one box, for one scope."** A certificate carrying a hostname is not bound to that machine. If the private key can be copied, the pair works anywhere the network reaches, while still impersonating that host — which is worse than an unbound credential, because the audit trail names a box the attacker was never on. Binding needs hardware: a TPM-resident non-exportable key, or attestation the gateway actually checks. Until one of those exists the honest claim is **host-identity scoped, not host-bound**, and the bound on the damage is the certificate lifetime alone. Both halves are technically possible, so the requirement stays: keys are generated in and never leave a TPM, and the gateway refuses a certificate request that cannot attest to that. | **DESIGNED**, and weaker than it read |
+| The agent's credential outlives what the sponsor is still allowed to do | ⭐ Added 2026-09-04. The grant is derived from a sponsor who can be disabled, demoted or have a group removed. Required: the agent's authority is re-derived from the sponsor's current state at decision time rather than frozen at issue time, and a sponsor's revocation propagates to every agent they sponsor inside the bound in TM-27. | **NOT MODELLED** |
 | The credential outlives the agent | One action revokes the certificates, cuts live sessions, and freezes the account. | **DESIGNED** |
 
 ### What it can see, which is the control people forget
@@ -132,6 +133,7 @@ reads and there never will be. Everything else is built so that row stops matter
 | --- | --- | --- |
 | A loop goes wrong and does the same destructive thing four thousand times | Caps on actions per window and hosts touched at once. Trip a limit and the agent suspends itself rather than slowing down. | **DESIGNED** |
 | The agent asks for escalation until somebody gets tired and says yes | Requests state the host, the action and the reason. Grants are windowed and expire on their own. Where dual control is on, agent requests obey it and the approver is never the requester. ⚠️ Nothing caps how often it may ask. | **PARTIAL** |
+| The agent gets an approval for one thing and spends it on another | ⭐ Added 2026-09-04. A5's whole method is persuasion, so an agent that can restate a request after it was approved is the cheapest attack in this document. Required: the approval binds to the normalized operation, the target, a hash of the parameters, the policy revision in force, an expiry and a single-use nonce, and any change to those voids it. See TM-29 in the main threat model. | **NOT MODELLED** |
 
 ## What we do not defend against
 
@@ -151,6 +153,9 @@ reads and there never will be. Everything else is built so that row stops matter
 | TMA-02 | An open gap undercuts the read surface | An agent on an enrolled host reads fleet-wide host maps whatever its grant says. Closes before agent accounts ship. |
 | TMA-03 | Rate limits and kill switch are unmeasured | Both are on the public site. No thresholds, no storage, no revocation path is written down anywhere yet. |
 | TMA-04 | Approval fatigue is unbounded | Nothing limits how often an agent may ask. |
+| TMA-06 | The certificate is not bound to the host | ⭐ 2026-09-04. A hostname in a certificate is a name, not a binding. Without a non-exportable key the credential is portable and impersonates a machine the attacker never touched. |
+| TMA-07 | Agent approvals are not bound to what was approved | ⭐ 2026-09-04. Counting approvers is built. Binding an approval to the operation, the parameters and a nonce is not. |
+| TMA-08 | Sponsor revocation does not propagate | ⭐ 2026-09-04. Nothing states how long an agent keeps working after its sponsor is disabled. |
 | TMA-05 | Sponsor compromise has no control | A7 has nothing technical above it. Recorded rather than solved. |
 
 ## Where this came from

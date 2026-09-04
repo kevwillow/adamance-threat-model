@@ -1,7 +1,7 @@
 # Threat Model: adamance
 
 > Status: **REVIEWED, and current as of the date below.** Owner: project maintainer.
-> Last reviewed: **2026-09-02.** Prior passes: 2026-09-01, 2026-08-31, 2026-07-11, 2026-05-26, 2026-05-24.
+> Last reviewed: **2026-09-04.** Prior passes: 2026-09-02, 2026-09-01, 2026-08-31, 2026-07-11, 2026-05-26, 2026-05-24.
 >
 > Seven subsystems have their own threat models and are not repeated here:
 > [agent accounts](THREAT_MODEL_agent_accounts.md), [the installer](THREAT_MODEL_installer.md),
@@ -13,14 +13,27 @@
 
 ## How to read this document
 
-Every row carries its own current status and the date it was last checked. There is no precedence rule
-here and there should never be one: a security document that tells you which of its own halves to
-believe has stopped being a source of truth.
+**This document is the contract, not a status report.** A row states a threat and the control the code
+has to meet. The status beside it says how far the code has got. A threat is never removed because
+nothing implements it yet; it is removed only when it stops being technically possible, which is rare.
+A row with no code behind it is a requirement, not a claim, and nobody should cite it as a protection.
+
+Every row carries its own current status and the date it was last checked, and every correction lives
+on the row it corrects. That is the whole rule. There is no precedence between sections here and there
+should never be one: a security document that tells you which of its own halves to believe has stopped
+being a source of truth.
 
 ⚠️ **The long second-pass review further down is dated 2026-05-26 and is kept on purpose.** It is a
 point-in-time audit, and several items it calls a violation or a hard stop were fixed in the weeks
 after. Where that happened, the row says so in place, with the original wording quoted so the
 correction cannot be mistaken for the original text. Read a row, not a section.
+
+⚠️ **Corrected 2026-09-04: that promise was not kept in six places, and an outside reader found them
+before we did.** Five rows in the 2026-05-26 audit still read as current after a later pass had
+overturned them, and one row above the audit named an enforcement mechanism that does not exist in the
+tree. All six are corrected in place below and each one quotes what it used to say. The table under the
+next heading is a finding aid for those corrections. It is not an instruction about which half of this
+document to believe, and it stops being needed once every row it lists carries its own correction.
 
 ⭐ **Corrections are the most valuable thing in here.** Where a row once said a control was confirmed
 and that turned out to be false, the row says that too, because a gap nobody has looked at is ordinary
@@ -28,7 +41,8 @@ and a gap with a tick next to it sends every later reader somewhere else.
 
 ### Re-verified against live source on 2026-07-11, and still true
 
-**Contested items that were resolved. The older narrative language below is stale for these:**
+**Contested items that were resolved. Each one now carries its correction in place further down; this
+table is the index of them.**
 
 | TM | Contested claim (old narrative) | Live ground truth (2026-07-11) |
 |----|----|----|
@@ -107,6 +121,9 @@ Ranked by blast radius if compromised:
 | 7    | Postgres transactional store (MFA evidence, refresh tokens, enrollment tokens; DATA-02) | Forge fresh-MFA state to bypass every step-up gate, exfiltrate refresh/enrollment token hashes, replay enrollment |
 | 8    | Wazuh agent enrollment key                           | Log spoofing, alert suppression, blind the SIEM                                       |
 | 9    | Operator MFA recovery codes                          | Bypass MFA on operator accounts                                                       |
+| 11   | OpenBao unseal shares and root/recovery token        | ⭐ Added 2026-09-04. Unseals the store holding several of the rows above, so it inherits their blast radius. Split across people, never on the store's own host, never inside the deployment's own backup. |
+| 12   | Anchor signing key                                   | ⭐ Added 2026-09-04. Forge an off-box anchor and the only witness to a rewritten chain agrees with the rewrite. See [`THREAT_MODEL_audit_anchoring.md`](THREAT_MODEL_audit_anchoring.md). |
+| 13   | Stored session recordings                            | ⭐ Added 2026-09-04. Everything anyone typed in a privileged session, in bulk. Ranked here and not only in the subsystem document because the disclosure needs no other asset first. |
 | 10   | Audit logs                                           | Destruction or tampering hides any of the above                                       |
 
 ## Trust boundaries
@@ -123,6 +140,8 @@ Ranked by blast radius if compromised:
 | Managed host (Wazuh agent)    | Wazuh manager               | Untrusted ↔ control plane  | Pre-shared agent key, mutual auth | Wazuh proto (encrypted)           |
 | Managed host (adamance agent) | OPA bundle endpoint         | Untrusted ↔ control plane  | Signed bundles + mTLS host cert   | HTTPS                             |
 | Operator workstation          | Control plane (break-glass) | Privileged ↔ control plane | Hardware token + audited bastion  | SSH over WireGuard                |
+| API gateway                   | OpenBao / secrets store     | Intra-control-plane        | AppRole or Kubernetes auth        | TLS                               |
+| Every component               | Its time source             | Untrusted ↔ everything     | ⚠️ none stated                    | NTP, unauthenticated              |
 
 ## Adversaries
 
@@ -165,6 +184,9 @@ requirements; if it's not built, the threat is open.
 | Credential stuffing against admin UI          | MFA required for **all** admin accounts (FreeIPA OTP or WebAuthn). Rate limit on `/oauth/token`. Account lockout after N failed attempts with exponential backoff.                |
 | Phishing of admin session cookie              | Short JWT lifetime (≤15m), refresh tokens bound to IP and User-Agent, MFA step-up required for sensitive operations (user creation, policy change, machine enrollment).           |
 | Vulnerable upstream container image           | Pin all images by digest, not tag. Weekly Trivy scan in CI with a blocking severity threshold. Documented monthly patch cadence with emergency channel for CVEs ≥ 9.0.            |
+| The browser-facing OIDC flow is attacked instead of the password | ⭐ Added 2026-09-04. `state` and PKCE on every authorization request, `nonce` validated on the ID token, exact-match redirect URIs with no wildcard or prefix match, an authorization code that can be exchanged once, and a session identifier rotated on every privilege change. **Status: NOT MODELLED.** The rows above cover the credential and the cookie; the flow that mints the cookie was never written down. |
+| Content the console renders is attacker-supplied | ⭐ Added 2026-09-04. Hostnames, group names, approval reasons, audit fields, policy names and replayed transcript output all reach the console and all originate outside it. Output encoding at render, a CSP that forbids inline script, no CORS origin beyond the console's own. **Status: NOT MODELLED.** A stored script in a hostname runs with an operator's session and needs no phishing to get there. |
+| An authenticated caller changes an identifier and reaches another subject's object | ⭐ Added 2026-09-04. Object-level authorization on every route that takes an identifier, decided against the object rather than the route, and request bodies bound to an explicit field allowlist so a client cannot set a field the handler never meant to accept. **Status: NOT MODELLED.** |
 | Direct exposure of LDAP/Kerberos ports        | Only the reverse proxy is in the edge zone. ⚠️ **Corrected 2026-09-02: this row read "LDAPS/Kerberos are not reachable from outside the control plane subnet" and the shipped HA compose contradicts it.** `deploy/docker-compose.ha.yml:68-74` publishes seven directory and Kerberos ports in short form, so Docker binds them on all interfaces. The single-host package is unaffected. Tracked as an open gap; either the compose binds privately or this row stops claiming a containment it does not have. |
 
 ### Enrollment (primarily A1, A2)
@@ -174,7 +196,11 @@ requirements; if it's not built, the threat is open.
 | Unauthorized host joining the domain | Enrollment requires a **one-time scoped token** issued by an authenticated admin, bound to an expected hostname, expiring within 24 hours. No anonymous enrollment. No `1515/authd` exposed without prior token. |
 | MITM of the install script           | Install artifact is served over TLS only, from a pinned hostname, with a published SHA-256 checksum. Production deployments distribute via an internal package repository, not `curl \| bash`.                   |
 | Replay of an enrollment token        | Tokens are single-use and consumed atomically by the API. Token use is logged with the source IP and resulting host principal.                                                                                   |
-| Hostname spoofing during enrollment  | The enrolling host must present a CSR for the hostname declared in the token. The CA refuses to sign for a name not in the token.                                                                                |
+| Hostname spoofing during enrollment  | The enrolling host must present a CSR for the hostname declared in the token. The CA refuses to sign for a name not in the token. ⭐ Extended 2026-09-04: the match is against the SAN and not the CN alone, an extra SAN entry in the CSR is a refusal rather than an ignore, and the requester proves possession of the private key. **Status: PARTIAL**, the name check is built, the SAN and possession clauses are asserted nowhere. |
+| The enrolling host trusts whichever CA answers first | ⭐ Added 2026-09-04. First contact is the weakest moment in the lifecycle and it is the moment the trust root gets decided. The agent pins the CA by a fingerprint delivered out of band with the token rather than trusting the first certificate it is shown, and the gateway refuses to complete an `--insecure` bootstrap for a production token. **Status: PARTIAL**, all three bootstrap modes exist in `src/client-agent/internal/enroll/join.go` and nothing refuses the weak one. |
+| An enrollment token is guessed, or read out of a log or a shell history | ⭐ Added 2026-09-04. At least 128 bits from a CSPRNG, stored hashed, never logged in full, and delivered by a channel that is not the one carrying the install command wherever that is possible. A `curl \| bash` line with its own token in it lands the credential in two shell histories and a proxy log. **Status: PARTIAL**, single-use and expiry are built, entropy and handling are unstated. |
+| A host is cloned, or re-enrolls under a name that already exists | ⭐ Added 2026-09-04. Enrollment for a name that is already active is refused rather than joined, unless the prior host was explicitly decommissioned. A VM image captured after enrollment carries a host key and a certificate, so two machines hold one identity and no audit trail can separate them. Decommission and rekey are lifecycle steps, not a manual tidy-up. **Status: NOT MODELLED.** |
+| A decommissioned host keeps working | ⭐ Added 2026-09-04. Decommission revokes the host certificate, disables the host principal, invalidates the keytab and drops the host from bundle scope, inside the bound stated in the revocation-convergence row below. **Status: NOT MODELLED.** |
 
 ### Lateral movement (primarily A2)
 
@@ -185,6 +211,8 @@ requirements; if it's not built, the threat is open.
 | Compromised host modifies its own audit logs to hide activity    | ⚠️ **Corrected 2026-09-02: this row credited Wazuh FIM, which is not wired.** No adamance code emits a FIM watchlist (TM-12 below), and Wazuh is an optional module nothing gates on. The control that does hold is central: privileged actions land in the HMAC-SHA256 chain on the control plane, not on the host, and a signed anchor of the chain head leaves the box on a timer. See [`THREAT_MODEL_audit_anchoring.md`](THREAT_MODEL_audit_anchoring.md). Where an operator has installed the Wazuh agent, real-time forwarding is a second copy and not the primary control. |
 | Compromised host pulls sensitive policies it shouldn't see       | 🔴 **NOT MITIGATED, corrected 2026-08-31.** Bundle requests are authenticated with the host certificate, and that is ALL that is checked. Bundles are **not** scoped per host group: every enrolled host receives byte-identical bundles. See the as-built note below. |
 | Compromised host abuses its sudo rights to escalate              | sudo rules are scoped narrowly (specific commands, not `ALL=(ALL)`). Sudo invocations are audit-logged centrally and trigger alerts on anomaly.                                         |
+| An SSH certificate is revoked and `sshd` never hears about it | ⭐ Added 2026-09-04. `sshd` consumes a KRL or `RevokedKeys`, not an X.509 CRL, so the revocation path has to produce, distribute and load the artifact `sshd` actually reads, with a measured convergence bound. The CRL endpoint at `src/api-gateway/internal/handlers/sshca/crl.go` is not on its own evidence that this holds. Short certificate lifetimes bound the damage and are not revocation. **Status: OPEN, unverified.** |
+| A privileged mutation lands and its audit entry does not | ⭐ Added 2026-09-04. A valid hash chain proves what was written was not altered. It says nothing about what was never written, and a missing entry reads exactly like an action that never happened. FreeIPA, Keycloak, Postgres and OPA cannot share one transaction, so: intent recorded before the mutation is attempted, outcome recorded after, an outcome nobody could confirm stored as an explicit unconfirmed state rather than dropped, reconciliation to resolve those states, and an audit append that fails takes the operation down with it. **Status: NOT MODELLED.** |
 | Stolen user TGT used from another host                           | Tickets are bound to addresses where possible. Short ticket lifetime (8h default per SSSD `krb5_lifetime`; 1h target for admin principals, enforced via per-principal KDC policy `max_life`). Renewal requires re-auth past max renewable lifetime (24h). |
 
 ### Policy bypass (primarily A3)
@@ -202,7 +230,28 @@ requirements; if it's not built, the threat is open.
 | Operator with API access silently escalates a user    | All write operations to FreeIPA and OPA are logged to Wazuh tagged with the operator's identity. Logs are write-only from the operator's perspective (separate retention bucket with object lock). |
 | Compromised operator account changes policy           | Sensitive operations require fresh MFA (step-up within last 5 minutes). High-impact policy changes (anything affecting `admins`, `wheel`, or root SSH) require a second approver via the UI.     |
 | Backup tampering                                      | Backups are signed and encrypted with a key that no operator account holds. Restore requires presenting the offline key.                                                                           |
+| An approval is replayed, or granted for one thing and spent on another | ⭐ Added 2026-09-04. "A distinct approver approved something" is not enough. An approval binds to the normalized operation, the requester, the target, a hash of the parameters or content, the policy revision in force, an expiry and a single-use nonce, and altering any of them voids it. Without that, A is approved and B is executed, or A is mutated after approval and before use. The same binding applies to policy publication, agent escalation requests, break-glass and restore. **Status: NOT MODELLED**, the approver-count and no-self-approval half is built in `policies/governance/require_approval.rego`, the binding half is not. |
+| The secrets store is unsealed, dumped or restored by the wrong person | ⭐ Added 2026-09-04. OpenBao is a trust boundary and was not described as one anywhere. Unseal shares and root or recovery tokens split across people, never resident on the store's own host, never inside the deployment's own backup, and no root token left in a file or an environment variable by bootstrap. Total loss of the store is a rehearsed recovery path rather than an outage nobody has tried. **Status: NOT MODELLED.** |
+| A restore resurrects a revoked credential or a deleted account | ⭐ Added 2026-09-04, extending the backup row above, which covers tampering with a backup and not the act of restoring one. Restore is itself a security event: authorized, audited and anchored like any other. FreeIPA, Postgres, Keycloak and the audit chain restore to a consistent point in a stated order, and every credential revoked between the snapshot and the restore is re-revoked as part of the procedure. The procedure is exercised on a cadence, because an untested restore is a claim. **Status: NOT MODELLED.** |
+| Recordings and audit entries are read, kept or exported by people who should not | ⭐ Added 2026-09-04. This is the most sensitive data the product holds. Encryption at rest, a retention period with real deletion at the end of it, an audit entry for every view and every export, and a stated position on redaction. Reading a recording is itself a recorded act. **Status: PARTIAL**, `recordings.list` and `recordings.read` are policy-gated; retention, deletion, export logging and redaction are not built. See TMSR-03 and TMSR-04. |
 | Operator pivots from API gateway host to FreeIPA host | Control plane components run on separate hosts (or at minimum, separate user namespaces with no shared sockets). The API gateway service account has no SSH access to other control plane hosts.   |
+
+### Cross-cutting: what every other row in this section rests on
+
+⭐ Added 2026-09-04, after an outside reader worked through the published corpus. Each of these sat
+underneath rows above and was written down nowhere, and a control that is only implicit is not in the
+contract. The requirement holds whatever the status says.
+
+| Vector | Required control |
+| ------ | ---------------- |
+| A clock is rolled back, or NTP is answered by an attacker | Kerberos ticket validity, X.509 and SSH certificate lifetimes, JWT expiry, MFA freshness (`step_up_mfa_max_age`), enrollment-token expiry, bundle TTL and anchor liveness are every one of them clock-dependent, and a host that controls its own clock controls all of them locally. Time comes from an authenticated source, NTS or NTP restricted to the control plane. The gateway refuses an assertion whose issue time falls outside a bounded skew from its own. A host whose clock cannot be trusted fails the decision rather than being handed a stale `max_age` for free. **Status: NOT MODELLED.** Nothing in this document previously said where time comes from. |
+| A disabled account, removed group, revoked certificate or withdrawn grant keeps working | One table, and it does not exist yet: for user disablement, group removal, Kerberos TGT, access JWT, refresh token, SSH user certificate, SSH host certificate, host X.509, SSSD cache, OPA bundle, VPN profile and RADIUS client, the maximum time each stays effective after revocation and the behaviour of each while its authority is unreachable. Nothing may be described as immediate unless a mechanism makes it so. Short lifetimes are a bound on damage, not a revocation path. **Status: NOT MODELLED.** Individual TTLs are configured in several places and no row states the sum of them. |
+| An operator-configurable destination is pointed somewhere else and adamance authenticates to it | The `secret_ref` rule from the RADIUS module is the general rule and not a RADIUS one. Every outbound destination an operator can configure — anchor sinks (git, email, SSH or SCP, object store), webhooks, SMTP, package sources, the OIDC issuer, Wazuh, and AD or LDAP endpoints — resolves its credential from a name the code owns rather than a path or URL taken from a row, refuses link-local and cloud-metadata addresses, does not follow a redirect to another host, and re-validates at the moment of use because validating on write is only sound while writes are the only way rows appear. **Status: PARTIAL.** Held for AD (`adsecrets`) and RADIUS (`radiussecrets`), which is where it was discovered. Unstated everywhere else. See [`THREAT_MODEL_network_modules.md`](THREAT_MODEL_network_modules.md). |
+| Two names that are equal in one layer and different in another | One canonical form for a principal, defined once: case folding, Unicode normalization, realm and FQDN handling, and the mapping between the Keycloak subject id, the FreeIPA DN, the Samba SID and the SSH principal. An account deleted and recreated under the same name is a different subject. Authorization keys on the stable identifier and never on the display name. **Status: NOT MODELLED**, and it is the failure mode that kills identity products: two strings that one layer calls equal and another does not. |
+| Storage fills and the control plane stops deciding | Every store an unprivileged actor can grow — recordings, audit entries, Wazuh data, spool directories — has a quota and a stated behaviour at the limit, and that behaviour is refusal rather than silent loss. A session that cannot be recorded is already refused; an audit entry that cannot be written gets the same direction. **Status: PARTIAL.** |
+| An unauthenticated or low-privilege caller exhausts the gateway | Connection and request caps, bounded request bodies, bounded OPA evaluation time, per-IP and per-principal limits on the expensive routes, and a bound on LDAP group sizes that a single decision will expand. The `/oauth/token` limiter is per IP and the Keycloak failure counter is per account, so a spray distributed across many source addresses and many accounts is under both. **Status: PARTIAL.** Denial of service is the least-covered category in this document and that was not a decision anyone made. |
+| Losing a dependency changes the answer and nobody wrote down which way | For each of OPA, FreeIPA, Postgres, Keycloak and the anchor sink, this document states whether losing it fails open or closed. Undeclared is the same as unknown, and unknown at the moment of an outage is decided by whoever wrote the error path. **Status: NOT MODELLED.** |
+
 
 ### Cryptographic baseline
 
@@ -256,6 +305,7 @@ it held is still in the authoritative table verbatim.
 | 2026-08-31 | Bundle-scoping row refuted. It had read "✅ CONFIRMED / Finding: NONE" and nothing implemented the control. Corrected in place with the false text quoted. | - |
 | 2026-09-01 | Correction pass over MFA, step-up mechanism, FIM (TM-12) and the crypto-config passage. Several rows had named files and middleware that have never existed in this repository. | - |
 | 2026-09-02 | Reconciliation pass. Removed the internal precedence rule that told readers which half of this document to believe. Corrected the LDAP/Kerberos exposure row against the shipped HA compose, the dual-control approver count (one approver by default, not two), and the audit-log row that credited unwired Wazuh FIM. Added the post-quantum key-exchange baseline, which was built and undocumented. Fixed a false assurance in the 2026-05-26 revision-history row. Seven subsystem threat models split out and linked from the header. | project maintainer |
+| 2026-09-04 | Correction pass, prompted by an external read of the published corpus. Six rows that had gone stale are corrected in place and each quotes its former text: the account-lockout row, the TM-08 digest-pinning paragraph, the TM-10 enrollment hard stop, the TM-16 critical-bundle gap, the TM-19 paragraph that named a nonexistent `authz.RequireMFA()` middleware, and the TLS 1.2 internal-client violation. The reading rule at the top now states that this document is a contract rather than a status report, and that a threat stays until it stops being technically possible. Added: a cross-cutting section covering trusted time, revocation convergence, credentialed egress, identity canonicalization and availability; approval binding and audit atomicity; the OIDC, rendering and object-authorization surface of the console; enrollment CA bootstrap, token entropy, host cloning and decommission; OpenBao, restore and recording privacy; and the SSH KRL question. Three assets and two trust boundaries added. | project maintainer |
 
 ---
 
@@ -325,8 +375,15 @@ after N failed attempts with exponential backoff.
   `src/api-gateway/internal/config/config.go:868-871` refuses boot if a password-only (LoA1) `acr` alias
   is allow-listed as MFA.
 - Rate limiting on `/oauth/token`: ✅ RESOLVED. `src/api-gateway/internal/middleware/ratelimit.go` adds `OAuthTokenRateLimiter` (5 req/min per IP+User-Agent, keyed by SHA256(IP+UA)). `OAuthTokenRateLimitMiddleware` is wired into the router in `main.go`. Rate-limit events are emitted as structured audit events. See **TM-06** HANDOFF.
-- Account lockout after N failed attempts: ❓ NOT FOUND. No lockout logic in `src/api-gateway/`. FreeIPA
-  may apply its own (not verified in code). This is a gap for the API gateway layer.
+- Account lockout after N failed attempts: ✅ RESOLVED (2026-07-11). ⚠️ **Corrected 2026-09-04: this
+  row read "❓ NOT FOUND. No lockout logic in `src/api-gateway/`. FreeIPA may apply its own (not verified
+  in code). This is a gap for the API gateway layer." and it stayed that way for 55 days after the gap
+  was closed.** The lockout is not in the gateway and was never going to be: it belongs to the identity
+  provider. `deploy/setup/keycloak/realm-adamance.json.tmpl` sets `bruteForceProtected:true`,
+  `failureFactor:10`, `permanentLockout:false`, `maxFailureWaitSeconds:900`. Dev provisions its realm
+  separately and additionally carries the OIDC 5/min per-IP limit. What is still not written down is the
+  interaction between the two and whether a distributed spray under the per-IP threshold reaches the
+  failure counter at all, which is the availability row in the cross-cutting section.
 
 ---
 
@@ -370,9 +427,14 @@ documented monthly patch cadence.
   `digest-check` CI job (release.yml) enforces that no non-digest image tag passes CI for both
   `deploy/dev/docker-compose.dev.yml` and `package/adamance/docker-compose.yml` (single-host production).
   Local `adamance/*:dev` images, `${VAR}` overrides, and `build:` blocks are correctly excluded.
-  The single-host package (`package/adamance/docker-compose.yml`) still contains non-digest images
-  (`freeipa/freeipa-server:rocky-9-4`, `openpolicyagent/opa:latest`, `wazuh/*:4.8.0`) that must
-  be resolved and pinned before production use.
+  ⚠️ **Corrected 2026-09-04: this paragraph read "The single-host package
+  (`package/adamance/docker-compose.yml`) still contains non-digest images
+  (`freeipa/freeipa-server:rocky-9-4`, `openpolicyagent/opa:latest`, `wazuh/*:4.8.0`) that must be
+  resolved and pinned before production use", and the Finding line directly below it already said the
+  opposite.** All five images in `package/adamance/docker-compose.yml` are `@sha256:`-pinned as of
+  2026-07-11. A digest pin is not provenance: it says the bytes did not change, not that the bytes came
+  from the build anyone believes they came from. Signed provenance for the images and for the release
+  artifacts is a separate requirement and is not met.
 - Trivy scan in CI: `release.yml` includes Trivy scanning of container images with blocking
   severity threshold (HIGH/CRITICAL).
 - Monthly patch cadence: documented in the release process and the design docs.
@@ -493,9 +555,16 @@ IPA API call (`ipa host-add` or `ipa service-add` scope).
 
 **Finding:** TM-10 (LOW). Confirm host keytab scope in the FreeIPA IPA API call during enrollment.
 
-**Resolution:** ⚠️ DEFERRED. HARD STOP: MISSING IMPLEMENTATION (2026-05-27, red-team).
+**Resolution:** ✅ RESOLVED (2026-07-11). Superseded the 2026-05-27 assessment below.
 
-The enrollment handler does NOT call FreeIPA at all. It is a stub that validates a token, writes to the Postgres `machines` table, and returns `{status, hostname, host_group}`. No `ipa host_add`, no keytab generation, no host certificate issuance. The client-agent expects `{cert_pem, key_pem, keytab_b64, wazuh_key, host_dn, realm, domain, ipa_servers}` but receives none of these. The IPA integration (including proper single-host keytab scope) must be built before enrollment is functional.
+⚠️ **Corrected 2026-09-04. The paragraph this replaced was left standing as if current and said:**
+"⚠️ DEFERRED. HARD STOP: MISSING IMPLEMENTATION (2026-05-27, red-team). The enrollment handler does NOT
+call FreeIPA at all. It is a stub that validates a token, writes to the Postgres `machines` table, and
+returns `{status, hostname, host_group}`. No `ipa host_add`, no keytab generation, no host certificate
+issuance." That was true when written and false by 2026-07-11: `enrollment/handler.go` calls `HostAdd`,
+`GetKeytab` and `IssueHostCert` (:514/533/547), and the join-redeem path does the same. The original
+finding — that the keytab is scoped to the single host CN — is answered by `HostAdd` issuing per-host,
+and the residue is that nothing asserts it, so it is carried as a requirement rather than a claim.
 
 ---
 
@@ -732,11 +801,17 @@ bundle server `Config`. `ServeHTTP` now applies ≤60s TTL (configurable, defaul
 `/policies/bundle.critical.tar.gz` (security-critical policies: sudo, firewall, admin-group), while
 the default bundle serves at 300s TTL. Mechanism is correctly implemented.
 
-**Remaining gap (V1 follow-up):** `bundle.critical.tar.gz` is never produced by `scripts/build-policies.sh`;
-the `critical` target does not exist. The TTL mechanism exists but has no artifact to serve.
-`scripts/build-policies.sh` must be updated to add a `critical` target that builds only
-`adamance.sudo.*`, `adamance.firewall.*`, and `adamance.lib.decision`. Additionally, the YAML config field
-`CriticalBundleDir` is not plumbed into `CriticalBundlePath` in the bundle server.
+**Resolution:** ✅ RESOLVED (2026-07-11). ⚠️ **Corrected 2026-09-04: the paragraph below was left
+standing as a current gap 55 days after it closed.** It read: "**Remaining gap (V1 follow-up):**
+`bundle.critical.tar.gz` is never produced by `scripts/build-policies.sh`; the `critical` target does
+not exist. The TTL mechanism exists but has no artifact to serve. Additionally, the YAML config field
+`CriticalBundleDir` is not plumbed into `CriticalBundlePath` in the bundle server." Both halves are
+built: `scripts/build-policies.sh` has a `critical` target, `release.yml` and `policies-build.yml`
+produce the artifact, and `bundle.go` plumbs `CriticalBundlePath` and `CriticalMaxAge`. `policies/sudo`
+was dropped from the critical sources because sudo policy comes from FreeIPA, and the build now fails
+if a listed critical source is missing. The TTL is a staleness bound and not a revocation bound; how
+fast a withdrawn permission actually stops being enforced is the revocation-convergence row in the
+cross-cutting section, and it is not measured.
 
 ---
 
@@ -782,7 +857,16 @@ policy changes require a second approver via the UI.
 
 **As-built:** ✅ CONFIRMED for MFA step-up. ✅ DUAL CONTROL BUILT AND FAIL-CLOSED (2026-08-28).
 
-The `authz.RequireMFA()` middleware enforces fresh MFA for sensitive endpoints. The UI has an Approvals
+⚠️ **Corrected 2026-09-04: this paragraph opened "The `authz.RequireMFA()` middleware enforces fresh
+MFA for sensitive endpoints" and there is no such middleware.** The only `RequireMFA` in the tree is
+`src/api-gateway/internal/handlers/users/handler.go:1624`, an admin action that forces a user to enrol
+OTP, routed at `src/api-gateway/cmd/server/main.go:4553`, which is a different thing entirely. Step-up
+is enforced by policy, not by a per-route Go middleware: the `check_user_with_mfa_stepup` family in
+`policies/api/authz.rego` gates 79 operations, and a factor older than `step_up_mfa_max_age` (default
+300s, `policies/api/authz.rego:3408`) returns the `require_mfa_age_max_seconds` obligation
+(`policies/api/authz.rego:2582`). The same correction was already made at the step-up row above on
+2026-09-01 and was not carried down to here, which is exactly the failure this document's own reading
+rule exists to prevent. The UI has an Approvals
 inbox (`web/admin-ui/src/pages/Approvals.tsx`). The backend gate is the OPA decision
 `governance.require_approval` in `policies/governance/require_approval.rego`, evaluated by
 `src/api-gateway/internal/handlers/policy/handler.go` on `POST /api/v1/policies/publish`
@@ -850,7 +934,12 @@ minimum version setting was not confirmed in this pass.
 **Finding:** TM-21 (RESOLVED). Confirmed: `src/common/mtls/tlsconfig.go` sets `MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13`. The mTLS server uses `BuildServerConfig`. TLS 1.2 is rejected. No changes required. See **TM-21** HANDOFF.
 
 #### Internal service clients use TLS 1.2
-**As-built:** ❌ VIOLATION.
+**As-built:** ✅ RESOLVED (2026-07-11). ⚠️ **Corrected 2026-09-04: this read "❌ VIOLATION" and stayed
+that way after the violation was fixed.** There is no remaining `tls.VersionTLS12` in
+`src/api-gateway` or `src/wazuh-bridge` (31 `MinVersion: VersionTLS13`, zero `VersionTLS12`), and the
+last residual, the three client-agent join-bootstrap configs in
+`src/client-agent/internal/enroll/join.go`, was raised to `tls.VersionTLS13` on 2026-07-11. The
+original finding follows unaltered, because the file list is what made it findable.
 
 The api-gateway server correctly enforces TLS 1.3 via `src/common/mtls/tlsconfig.go` (TM-21). However, multiple internal service-to-service clients still use `tls.VersionTLS12`:
 
@@ -932,3 +1021,17 @@ documents, including this one.
 | TM-23 | Internal service clients use TLS 1.2 instead of TLS 1.3 | ✅ RESOLVED (2026-05-27): the 8 api-gateway/wazuh-bridge clients → `MinVersion: tls.VersionTLS13`. **2026-07-11 re-verification caught a residual the "no VersionTLS12 in src/" claim missed: the client-agent join bootstrap (`enroll/join.go`, 3 paths) still allowed TLS 1.2 → fixed to `tls.VersionTLS13` (commit `574dfad`). Now genuinely zero `VersionTLS12` in `src/`.** | api-gateway + wazuh-bridge + client-agent |
 | TM-24 | (reserved) | | | |
 | TM-25 | Tenant isolation at the FreeIPA layer (NF-1) | ⛔ **N/A for V1, multi-tenancy was REMOVED.** adamance is single-tenant for V1 (never-MSP decision); the multi-tenant backend was deleted (`0248ebb`), so there is no per-tenant attack surface in V1. The `tenants` table is retained ONLY as the Sites FK-anchor to a single default tenant. The per-tenant Kerberos-principal isolation design is a **V2** concern and is NOT wired for V1. (Historical: it superseded the S-15 `{"TenantID": …}` option-key approach FreeIPA silently discarded.) | V2 (deferred) |
+| TM-26 | Trusted time | ⭐ OPEN (2026-09-04). Every lifetime, expiry and freshness check in this document trusts a clock nobody authenticated. Direction: NTS or control-plane-restricted NTP, a bounded skew check at the gateway, and a decision that fails rather than ages gracefully when a host's clock is not trustworthy. | control plane + agent |
+| TM-27 | Revocation convergence | ⭐ OPEN (2026-09-04). No single statement of how long a revoked credential keeps working, per credential type, or what happens while its authority is unreachable. Direction: one table covering all twelve credential types, with a measured bound each. | control plane |
+| TM-28 | SSH revocation reaches `sshd` | ⭐ OPEN (2026-09-04). `sshd` reads a KRL or `RevokedKeys`, not an X.509 CRL. Direction: prove what `handlers/sshca/crl.go` serves is consumed by `sshd`, or build the KRL path, and measure the convergence. | api-gateway + agent |
+| TM-29 | Approval binding, replay and TOCTOU | ⭐ OPEN (2026-09-04). Approvals count approvers and do not bind to what was approved. Direction: bind to normalized operation, requester, target, content hash, policy revision, expiry and a single-use nonce, across policy publish, agent escalation, break-glass and restore. | policies + api-gateway |
+| TM-30 | Audit completeness and mutation atomicity | ⭐ OPEN (2026-09-04). The chain proves nothing was altered; nothing proves everything was written. Direction: intent before mutation, outcome after, an explicit unconfirmed state, reconciliation, and a failed append that fails the operation. | api-gateway + audit |
+| TM-31 | Anchor signing key and its trust root | ⭐ OPEN (2026-09-04). Anchors are described as signed and the signing key is named nowhere. Direction: name the key, the algorithm, the verifier's trust root, distribution, rotation and compromise recovery. If it is the HMAC chain key, anyone who can verify can forge. | audit anchoring |
+| TM-32 | Off-box preservation, not just off-box witness | ⭐ OPEN (2026-09-04). Only the chain head leaves the box, so destruction of the local store is provable and not recoverable. Direction: state the distinction plainly, and decide whether the full event stream ships to immutable storage. | audit anchoring |
+| TM-33 | Console web surface | ⭐ OPEN (2026-09-04). OIDC flow parameters, rendering of attacker-supplied strings, and object-level authorization were never modelled. Direction: PKCE/state/nonce/exact redirect, CSP with no inline script, per-object authorization and field allowlists on write. | admin-ui + api-gateway |
+| TM-34 | Enrollment lifecycle beyond first join | ⭐ OPEN (2026-09-04). CA bootstrap trust, token entropy and handling, SAN rather than CN, proof of possession, host cloning, re-enrollment and decommission. | api-gateway + client-agent |
+| TM-35 | Availability and fail direction | ⭐ OPEN (2026-09-04). Resource exhaustion is the least-covered category here, and no component states whether losing a dependency fails open or closed. | all |
+| TM-36 | Secrets store as a trust boundary | ⭐ OPEN (2026-09-04). OpenBao appears in the README and in no threat model. Unseal shares, root and recovery tokens, bootstrap, backup and total-loss recovery. | deploy + api-gateway |
+| TM-37 | Restore as a security event | ⭐ OPEN (2026-09-04). Backup tampering is modelled; restoring is not. A restore can resurrect a revoked credential or a deleted account. | deploy + control plane |
+| TM-38 | Identity canonicalization | ⭐ OPEN (2026-09-04). No single canonical principal form across Keycloak, FreeIPA, Samba and SSH. | control plane |
+| TM-39 | Recording and audit privacy | ⭐ OPEN (2026-09-04). Encryption at rest, retention with real deletion, view and export auditing, redaction. See TMSR-03 and TMSR-04. | api-gateway + storage |
