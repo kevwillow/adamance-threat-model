@@ -27,7 +27,7 @@ are published anyway. When the source opens, every one of them can be checked.
 | [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-05-24 to 2026-09-04 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
 | [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 to 2026-09-04 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
 | [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 | The installer and the supply chain behind it, including the part nobody can engineer away. |
-| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 to 2026-09-04 | The audit chain and the copy that leaves the box. |
+| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 to 2026-09-05 | The audit chain and the copy that leaves the box. |
 | [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | 2026-09-01 to 2026-09-04 | Recording privileged sessions, and the one deliberate exception. |
 | [THREAT_MODEL_samba_ad_dc.md](THREAT_MODEL_samba_ad_dc.md) | 2026-09-01 | The optional module that makes adamance the domain itself. |
 | [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 to 2026-09-04 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
