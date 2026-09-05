@@ -36,8 +36,15 @@ unpacks or runs any of it". What is true is that the script verifies every artif
 it starts. What gets you to the script is TLS, DNS, and your own decision to trust `get.adamance.dev`.
 Nothing more.
 
-⚠️ This means the public copy on adamance.dev overstates it today. The word doing the damage is
-"everything", because the script is one of the things fetched and it is the one thing not checked.
+⚠️ **Corrected 2026-09-05. This read "This means the public copy on adamance.dev overstates it
+today", and it had already stopped being true when it was published.** TMI-02 below records the copy
+being corrected on 2026-09-04: the front page now reads "every artifact it fetches is
+signature-checked". The two sentences sat in one file at one commit saying opposite things about the
+same web page, which is the failure this document's own rule exists to prevent — a correction was
+filed in the register and never propagated to the prose that stated the fault. What the paragraph
+above still establishes is unchanged and is the reason the wording mattered: the script is one of the
+things fetched and it is the one thing not checked. That gap is real, it is unfixable by a signature,
+and TMI-07 carries what would actually close it.
 
 ## Assets
 
@@ -117,7 +124,7 @@ they pull. adamance is a thin layer over other people's code and this is where m
 | TMI-04 | No release provenance | Nothing attests which commit, which runner, or which inputs produced an artifact. |
 | TMI-05 | Downgrade is unbounded | A correctly signed old release installs cleanly forever. |
 | TMI-06 | Partial-install state is undescribed | Nobody has written down what a host looks like when the agent install dies halfway. |
-| TMI-07 | There is no verify-then-run path | ⭐ 2026-09-04. The unfixable gap is that a piped script cannot check itself. The fix is not a signature, it is an alternative: publish the release commit SHA and the tarball SHA-256 on the main site, and document clone-verify-run as the recommended path. Git is a Merkle tree, so one commit SHA covers every byte, and no per-file manifest is needed. Two caveats belong in that copy rather than under it: commit SHAs are still SHA-1 with collision detection, so the tarball SHA-256 is the stronger anchor; and `get.adamance.dev` shares a Cloudflare zone with `adamance.dev`, so publishing the hash on `get.` buys nothing — the separation that makes this worth doing is `adamance.dev` against `github.com`. Blocked today because the source repository is not public and no release exists to hash. |
+| TMI-07 | There is no verify-then-run path | ⭐ 2026-09-04, ⚖️ **raised by the maintainer before any review found it:** *"we also need to offer the option for the user to download or clone the repo and verify it with a hash first before doing anything, rather than trusting the script."* The unfixable gap is that a piped script cannot check itself. The fix is not a signature, it is an alternative: publish the release commit SHA and the tarball SHA-256 on the main site, and document clone-verify-run as the recommended path. Git is a Merkle tree, so one commit SHA covers every byte, and no per-file manifest is needed. Two caveats belong in that copy rather than under it: commit SHAs are still SHA-1 with collision detection, so the tarball SHA-256 is the stronger anchor; and `get.adamance.dev` shares a Cloudflare zone with `adamance.dev`, so publishing the hash on `get.` buys nothing — the separation that makes this worth doing is `adamance.dev` against `github.com`. Blocked today because the source repository is not public and no release exists to hash. |
 | TMI-08 | arm64 has never been installed | ⭐ 2026-09-04. arm64 packages are built and the site claims every Pi from the 3 onward on a 64-bit image. Every install test hardcodes amd64, so no arm64 install has ever run. The claim is plausible and untested rather than false, and it stays as a requirement on the code. |
 
 ## Where this came from

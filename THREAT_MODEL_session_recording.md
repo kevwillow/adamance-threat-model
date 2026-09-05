@@ -89,7 +89,7 @@ the machine and can reach the ingest socket.
 | Recorder, running as the operator | Collector, on the same host | `SO_PEERCRED` on a unix socket, sender only | **BUILT** |
 | Collector | Gateway | Host mTLS | **BUILT** |
 | Gateway | Stored recording | Gateway signs the document | **BUILT** |
-| Console user | Playback | Policy, `recordings.read` gated on the recording feature | **BUILT** |
+| Console user | Playback | Policy, `recordings.read` gated on the recording feature | ⚠️ **AUTHORIZATION BUILT, PLAYBACK NOT.** Corrected 2026-09-05: this cell read **BUILT** while the build-status note at the top of this document says the player is placed on the console page and never loaded, so a recorded session cannot currently be watched. What is built is the authorization path in front of a viewer that does not exist. |
 
 ## Vectors and controls
 
@@ -99,7 +99,7 @@ the machine and can reach the ingest socket.
 | --- | --- | --- |
 | Start a session that is never captured | Refused at connect when the spool is unwritable and break-glass is not engaged. This is the core guarantee and it has a test whose name says so. | **BUILT** |
 | Engage break-glass and run quietly | You need root, and you could have killed the recorder anyway. The transition is audited and pages. | **BUILT, and bounded** |
-| Kill the recorder mid-session | Degrading your own capture is inherent and recorded as such. You are the operator, the recorder is your process. | **ACCEPTED** |
+| Kill the recorder mid-session | ⚠️ **Corrected 2026-09-05. This read "Degrading your own capture is inherent and recorded as such." The first half is true and the second half is not.** Degrading your own capture is inherent — you are the operator and the recorder is your process. It is *not* recorded as such: this document's own TMSR-07 establishes that there is no end marker and no `incomplete` status, so a killed recorder produces a transcript that is indistinguishable from a short session. "Recorded as such" was the sentence that made the acceptance sound bounded, and nothing implements it. The acceptance stands for the killing; it does not stand for the recording of the killing. | **ACCEPTED for the act, NOT MODELLED for the evidence** |
 | Reach the machine by a path nobody wired a recorder to | ⚠️ Not modelled. SSH and sudo have recorders. `scp`, `sftp`, port forwarding, cron, systemd units, a local console login and anything else that gets a shell without going through those two are not described anywhere. | **NOT MODELLED** |
 
 ### Attacking somebody else's capture

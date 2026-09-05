@@ -73,7 +73,7 @@ nothing technical above it.
 
 | Rank | Asset | What it costs you |
 | --- | --- | --- |
-| 1 | The agent's short-lived certificate | Full use of the grant, on that host, until it expires |
+| 1 | The agent's short-lived certificate | ⚠️ **Corrected 2026-09-05. This read "Full use of the grant, on that host, until it expires."** The corrected credential row below withdrew "on that host": a certificate carrying a hostname is not bound to that machine, so a copied private key works anywhere the network reaches while still naming the enrolled host. Honest version: full use of the grant, **wherever the key is taken**, until it expires — and the audit trail names a box the holder was never on. |
 | 2 | The sponsor's account | Re-grant, re-scope, or stand up more agents |
 | 3 | What the agent can read: directory, host inventory, audit entries | Reconnaissance that outlives the credential |
 | 4 | Recordings of agent runs | Whatever the agent handled, disclosed |
@@ -83,7 +83,7 @@ nothing technical above it.
 
 | From | To | Authentication | Status |
 | --- | --- | --- | --- |
-| Agent process | Local host agent, SSH | Short-lived cert bound to the enrolled host | DESIGNED |
+| Agent process | Local host agent, SSH | ⚠️ **Corrected 2026-09-05: this read "Short-lived cert bound to the enrolled host."** Short-lived cert **scoped to the enrolled host's identity, not bound to the machine.** Binding needs a TPM-resident non-exportable key or attestation the gateway checks; neither exists. See TMA-06. | DESIGNED |
 | Agent process | API gateway | mTLS plus an agent-typed session | PARTIAL, fence built, producer absent |
 | **What the agent reads** | **Agent process** | **none, and none is possible** | see A5 |
 | Agent | Approval boundary | explicit refusal in policy | BUILT |
@@ -125,7 +125,7 @@ reads and there never will be. Everything else is built so that row stops matter
 | --- | --- | --- |
 | Agent activity is indistinguishable from its sponsor's | `AuditActorType()` is a total mapping with no default-to-user arm, so an unrecognised type records as `ActorTypeUnattributed` and never as a human (`src/api-gateway/internal/middleware/middleware.go:561`, `src/common/audit/actor.go:29`). In a signed, hash-chained record, visibly unknown beats quietly wrong. | **BUILT** |
 | The agent runs unrecorded | Recording is the condition of having an agent account, not a setting on a group. If the recorder is not live, the agent does not work. | **DESIGNED** |
-| The agent tampers with its own recording | Entries are HMAC-SHA256 chained (`src/common/audit/chain.go:95`) and a signed copy leaves the box on a timer. That detects tampering, it does not prevent it. Root on the box can still destroy what is on the box. | **PARTIAL**, chain built, agent capture designed |
+| The agent tampers with its own recording | Entries are HMAC-SHA256 chained (`src/common/audit/chain.go:95`). That detects tampering, it does not prevent it. Root on the box can still destroy what is on the box. ⚠️ **Corrected 2026-09-05: this row also said "and a signed copy leaves the box on a timer", which republished a control the anchoring model has since withdrawn twice over.** Nothing signed in any independently checkable sense leaves the box — the anchor is HMAC'd under the chain's own key — and the only sink that exists today is a Wazuh instance inside this same stack. See TMA2-07 and TMA2-11. | **PARTIAL**, chain built, agent capture designed, off-box copy not built |
 
 ### Runaway behaviour
 
@@ -153,10 +153,10 @@ reads and there never will be. Everything else is built so that row stops matter
 | TMA-02 | An open gap undercuts the read surface | An agent on an enrolled host reads fleet-wide host maps whatever its grant says. Closes before agent accounts ship. |
 | TMA-03 | Rate limits and kill switch are unmeasured | Both are on the public site. No thresholds, no storage, no revocation path is written down anywhere yet. |
 | TMA-04 | Approval fatigue is unbounded | Nothing limits how often an agent may ask. |
+| TMA-05 | Sponsor compromise has no control | A7 has nothing technical above it. Recorded rather than solved. ⚠️ **Reordered 2026-09-05: this row printed after TMA-08, the same defect the anchoring model's TMA2-05 had, and has been moved back into sequence.** |
 | TMA-06 | The certificate is not bound to the host | ⭐ 2026-09-04. A hostname in a certificate is a name, not a binding. Without a non-exportable key the credential is portable and impersonates a machine the attacker never touched. |
 | TMA-07 | Agent approvals are not bound to what was approved | ⭐ 2026-09-04. Counting approvers is built. Binding an approval to the operation, the parameters and a nonce is not. |
 | TMA-08 | Sponsor revocation does not propagate | ⭐ 2026-09-04. Nothing states how long an agent keeps working after its sponsor is disabled. |
-| TMA-05 | Sponsor compromise has no control | A7 has nothing technical above it. Recorded rather than solved. |
 
 ## Where this came from
 
