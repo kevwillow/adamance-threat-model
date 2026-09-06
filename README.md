@@ -85,13 +85,9 @@ Both wordings are still on the row, the withdrawn text quoted.
 
 The commit history here runs from the first draft in May 2026 and has not been squashed. If you want
 to know when a claim appeared, when it was contradicted, and what it said before it was corrected,
-`git log -p` on any of these files will tell you. Every commit is authored
-`kev@gurutechnology.services`: the addresses were collapsed onto one domain before publication and
-onto that single address on 2026-09-06, because four commits had reached the public repository under
-an off-domain address the paragraph above already promised was not here. Author names are untouched,
-so the agents that drafted a change are still named on it. **Nothing else in the history was edited,
-and the rewrite is checkable rather than asserted:** the tree hash at `HEAD` is unchanged by it, so
-every byte of every file is the byte that was committed.
+`git log -p` on any of these files will tell you. Contributor email addresses were collapsed onto one
+address before publication. Author names are untouched, so a change still names whoever drafted it.
+Nothing else in the history was edited.
 
 ## How the contract gets checked
 
