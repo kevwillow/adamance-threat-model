@@ -52,11 +52,20 @@ A gap nobody has examined is ordinary. A gap with a tick beside it is worse.
 
 ### Who caught what
 
-⚖️ Some corrections carry **OPERATOR REFUTED** or **OPERATOR ACCEPTED**. These threat models were
-researched and drafted with a rig of AI models, and the maintainer designed and directed that work.
-The markers say which reversals came from him and which came from the models or an outside reviewer,
-because a document that quietly absorbs every correction into one anonymous voice tells you nothing
-about where its judgement actually comes from.
+⚖️ These threat models were researched and drafted with a rig of AI models. The maintainer designed
+that rig and directed it, and he read all of it, end to end, while the work was being planned. Where
+a model was wrong he overruled it. Where a model was right, including when it overturned something
+he had written, he accepted it and let it land.
+
+That is the part the models cannot supply. They are fast, they are often right, and several of them
+agreeing is not evidence that they are. What separates vibe-coded output from work you can rely on is
+not which model wrote the first draft. It is a person in the middle who understands the system, checks
+every conclusion, and knows when a model is wrong and why.
+
+The corrections record that judgement instead of hiding it. Some carry **OPERATOR REFUTED** or
+**OPERATOR ACCEPTED**, which say which reversals came from the maintainer and which came from the
+models or an outside reviewer. A document that absorbs every correction into one anonymous voice
+tells you nothing about where its judgement comes from.
 
 - **OPERATOR REFUTED** — the models had converged on something and the maintainer overturned it.
 - **OPERATOR ACCEPTED** — a model or a reviewer overturned something, including a conclusion written
@@ -66,10 +75,9 @@ The clearest example is in [the anchoring model](THREAT_MODEL_audit_anchoring.md
 because it reverses twice in two days in opposite directions. Two models concluded the whole subsystem
 was worth nothing against a control-plane insider, on the reasoning that the anchor is signed with the
 audit chain's own symmetric key, so verifying an anchor and forging one are the same capability. That
-is true and it is not the whole picture, which the maintainer said immediately:
-
-> *"I think everyone is overlooking the fact of off box anchoring... WHAT GETS SHIPPED OUTSIDE OF
-> ADAMANCE IS SAFE, by design! ... an attacker cant erase whats already shipped out."*
+is true and it is not the whole picture. The maintainer overturned it the same day: the models had
+overlooked off-box anchoring. What has already been shipped off the box is out of reach by design,
+and an attacker who takes the control plane afterwards cannot erase it.
 
 The models had treated the anchor as a purely cryptographic object. A destination is also a witness in
 time: it orders and timestamps what arrives, and that ordering is not a property of the payload or of
