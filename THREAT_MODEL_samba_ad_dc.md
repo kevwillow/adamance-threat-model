@@ -83,34 +83,34 @@ that runs the module is the box that holds the forest.
 
 ### The helper, which is the part that is thought through
 
-| Vector | Control | Status |
-| --- | --- | --- |
-| Hostile argv reaches a root binary | Re-parsed through `dctool.Parse` on every invocation; a malformed argv is refused, not executed. | **BUILT** |
-| Shell injection through a built command line | One `exec.Command` seam, fixed argv, no shell, no env-injected paths, and a test that fails the build on any direct exec elsewhere. | **BUILT** |
-| The administrator password leaks through `/proc` | Never on argv. Read from stdin once and passed on to `setpassword` on stdin. | **BUILT** |
-| A half-provisioned domain is left behind and nobody can tell | Exit codes separate "nothing was mutated" from "provisioned, then failed". | **BUILT** |
-| An unapproved change reaches the forest | Intent, plan, approval, then execute, with the execute arm refusing today. | **BUILT** |
+| ID | Vector | Control | Status |
+| --- | --- | --- | --- |
+| TMSAV-01 | Hostile argv reaches a root binary | Re-parsed through `dctool.Parse` on every invocation; a malformed argv is refused, not executed. | **BUILT** |
+| TMSAV-02 | Shell injection through a built command line | One `exec.Command` seam, fixed argv, no shell, no env-injected paths, and a test that fails the build on any direct exec elsewhere. | **BUILT** |
+| TMSAV-03 | The administrator password leaks through `/proc` | Never on argv. Read from stdin once and passed on to `setpassword` on stdin. | **BUILT** |
+| TMSAV-04 | A half-provisioned domain is left behind and nobody can tell | Exit codes separate "nothing was mutated" from "provisioned, then failed". | **BUILT** |
+| TMSAV-05 | An unapproved change reaches the forest | Intent, plan, approval, then execute, with the execute arm refusing today. | **BUILT** |
 
 ### The domain itself, which is not modelled at all
 
-| Vector | Control | Status |
-| --- | --- | --- |
-| Golden ticket from a stolen `krbtgt` | none | **NOT MODELLED** |
-| Pass-the-hash, pass-the-ticket, overpass-the-hash | none | **NOT MODELLED** |
-| NTLM downgrade and relay to LDAP or SMB | none. Nothing records whether NTLM is disabled, whether LDAP signing and channel binding are required, or whether SMB signing is enforced. | **NOT MODELLED** |
-| DCSync, or replication abuse by a delegated account | none | **NOT MODELLED** |
-| `SYSVOL` and `NETLOGON` content that clients execute | none. Nothing describes who may write there or what integrity it has. | **NOT MODELLED** |
-| Machine account takeover, including the well-known abuse of machine account creation quota | none | **NOT MODELLED** |
-| DNS poisoning against domain clients | none | **NOT MODELLED** |
-| Exposed DC ports | Nothing specific to this module. Note that the HA compose already publishes directory ports on all interfaces, and a DC placement would compound that. | **NOT MODELLED** |
+| ID | Vector | Control | Status |
+| --- | --- | --- | --- |
+| TMSAV-06 | Golden ticket from a stolen `krbtgt` | none | **NOT MODELLED** |
+| TMSAV-07 | Pass-the-hash, pass-the-ticket, overpass-the-hash | none | **NOT MODELLED** |
+| TMSAV-08 | NTLM downgrade and relay to LDAP or SMB | none. Nothing records whether NTLM is disabled, whether LDAP signing and channel binding are required, or whether SMB signing is enforced. | **NOT MODELLED** |
+| TMSAV-09 | DCSync, or replication abuse by a delegated account | none | **NOT MODELLED** |
+| TMSAV-10 | `SYSVOL` and `NETLOGON` content that clients execute | none. Nothing describes who may write there or what integrity it has. | **NOT MODELLED** |
+| TMSAV-11 | Machine account takeover, including the well-known abuse of machine account creation quota | none | **NOT MODELLED** |
+| TMSAV-12 | DNS poisoning against domain clients | none | **NOT MODELLED** |
+| TMSAV-13 | Exposed DC ports | Nothing specific to this module. Note that the HA compose already publishes directory ports on all interfaces, and a DC placement would compound that. | **NOT MODELLED** |
 
 ### Two directories, one identity
 
-| Vector | Control | Status |
-| --- | --- | --- |
-| FreeIPA and Samba disagree about who exists or what they may do | Nothing written. This is the one I would worry about most after the domain surface, because the product's whole pitch is one directory and one record, and this module creates a second. | **NOT MODELLED** |
-| Backup and restore restore them to different points | Nothing. Restoring one directory to an earlier state than the other is an identity inconsistency with no described resolution. | **NOT MODELLED** |
-| An account disabled in one remains usable through the other | Nothing. | **NOT MODELLED** |
+| ID | Vector | Control | Status |
+| --- | --- | --- | --- |
+| TMSAV-14 | FreeIPA and Samba disagree about who exists or what they may do | Nothing written. This is the one of most concern after the domain surface, because the product's whole pitch is one directory and one record, and this module creates a second. | **NOT MODELLED** |
+| TMSAV-15 | Backup and restore restore them to different points | Nothing. Restoring one directory to an earlier state than the other is an identity inconsistency with no described resolution. | **NOT MODELLED** |
+| TMSAV-16 | An account disabled in one remains usable through the other | Nothing. | **NOT MODELLED** |
 
 ## What we do not defend against
 
@@ -122,14 +122,14 @@ that runs the module is the box that holds the forest.
 
 ## Still open
 
-| ID | Item | Why it is still open |
-| --- | --- | --- |
-| TMSA-01 | Execution is unwired | Nobody holds the administrator credential and no ruling says who should. |
-| TMSA-02 | Status is dark | The observer is nil in every shipped build, so operators cannot see domain state at all. |
-| TMSA-03 | Never run against a real DC | The executor wants a root-owned helper at a fixed path that no CI runner provides, so the whole execute path is unexercised. |
-| TMSA-04 | The entire Windows protocol surface | Everything in the second table above. This is the largest single unmodelled area in the product. |
-| TMSA-05 | No FreeIPA-to-Samba reconciliation story | Two directories, and nothing says which wins or how they are kept honest. |
-| TMSA-06 | Placement is a security decision with no security write-up | Where the DC sits decides what is reachable, and the HA compose already binds directory ports widely. |
+| ID | Item | Why it is still open | Status |
+| --- | --- | --- | --- |
+| TMSA-01 | Execution is unwired | Nobody holds the administrator credential and no ruling says who should. ⚠️ **Re-measured 2026-09-21 at `857f6f0e`.** Still open and unchanged at HEAD 857f6f0e. `executeDomain` calls `dctoolexec.ExecuteGrant` with a literal zero `dctoolexec.Secret{}`, under a comment block stating the administrator credential is not wired and that nothing in the gateway has been ruled the place to hold it (executor.go:158-165). The refusal itself IS built and wired — a domain grant reaches the executor and is turned away by the executor's own check — so this is not missing code that someone forgot. The open gap's "what decides how long this takes" names the blocker as "a ruling on where the domain administrator credential is held", which is why the verdict is NEEDS_RULING and not NOT_BUILT. ⚠️ The callers of ExecuteGrant were not all walked to confirm no other path supplies a non-zero Secret; the executeDomain seam is the one the threat model cites. Evidence: `src/api-gateway/internal/handlers/sambaplan/executor.go:158-165` | **NEEDS_RULING** |
+| TMSA-02 | Status is dark | The observer is nil in every shipped build, so operators cannot see domain state at all. ⚠️ **Re-measured 2026-09-21 at `857f6f0e`.** Confirmed still dark. main.go:4133 reads "⛔ Observer is deliberately nil, and that is the whole honest claim of this build" — the only Observer mentions in the whole file are that comment and :4136, with no assignment into the handler struct. The handler field carries the same admission (handler.go:200-202, "nil in every shipping configuration today") and :216 gates observation on `h.Observer != nil`, so the endpoint resolves to `unknown`. No Observer implementation exists to wire. ⚠️ handler.go:95-97 still directs the reader to `TestNoObserverIsWiredYet`, a test already recorded as never having been written — that stale citation is unfixed. Evidence: `src/api-gateway/cmd/server/main.go:4133` · `src/api-gateway/internal/handlers/sambastatus/handler.go:200-202` · `src/api-gateway/internal/handlers/sambastatus/handler.go:216` · `src/api-gateway/internal/handlers/sambastatus/handler.go:95-97` | **NOT_BUILT** |
+| TMSA-03 | Never run against a real DC | The executor wants a root-owned helper at a fixed path that no CI runner provides, so the whole execute path is unexercised. ⚠️ **Re-measured 2026-09-21 at `857f6f0e`.** 🔴 The row's blanket claim is FALSIFIED IN PART. `make drill-samba-destroy` (Makefile:98-99) builds the dclive test binary and runs it as root in a throwaway `--network none` Ubuntu Samba container; domain_lifecycle_live_test.go:10-18 states it is "THE ONLY THING IN THIS REPO THAT RUNS THE HELPER AGAINST A REAL samba-tool" and that it drives the production entry point Run() with argv from the production renderer dctool.Render. Five subtests run, including `provision creates a forest samba-tool accepts` (:154) and `destroy leaves no forest behind` (:212). WHAT STILL HOLDS: (a) the drill is in no CI target — it appears in neither the ci-fast nor the ci-full body; (b) its own header says it is expected to fail on the destroy half (drill-samba-destroy.sh:7), which is recorded as still failing with exit 4; (c) the GATEWAY execute path — dctoolexec invoking the installed helper at the fixed /usr/libexec path (dctoolexec/executor.go:71) — has never run against a real DC, because the TMSA-01 credential refusal stops it before it starts. ⚠️ NOT CHECKED: the drill was not run in this re-measurement; its current colour is taken from that record, not re-measured. Evidence: `Makefile:98` · `scripts/drill-samba-destroy.sh:7` · `scripts/drill-samba-destroy.sh:38-41` · `src/modules/samba/cmd/adamance-dchelper/domain_lifecycle_live_test.go:10-18` · `src/modules/samba/cmd/adamance-dchelper/domain_lifecycle_live_test.go:154` · `src/modules/samba/cmd/adamance-dchelper/domain_lifecycle_live_test.go:212` | **PARTIAL** |
+| TMSA-04 | The entire Windows protocol surface | Everything in the second table above. This is the largest single unmodelled area in the product. ⚠️ **Re-measured 2026-09-21 at `857f6f0e`.** Confirmed absent by a 6-term concept sweep (ntlm · krbtgt · dcsync · MachineAccountQuota · server/client signing · LDAP channel binding) over the whole tree. CLASSIFYING the hits rather than counting them: in src/, policies/, deploy/ and configs/ there is not one enforcement or configuration site. The only main-tree hits are a prose comment about trust states (web/admin-ui/src/pages/Samba.tsx:17), an indirect Go module dependency (Azure/go-ntlmssp, an LDAP client library, not a DC control), and CHANGELOG/docs text. `find` for any `smb.conf*` across the tree returns NOTHING, so no Samba configuration is shipped to harden. Positive control: the same walk for `samba-tool` returns 5291 hits, so the sweep works. All eleven rows of the document's own second table (TMSAV-06 … TMSAV-13, and TMSAV-14-16) still read NOT MODELLED. The module design enumerates exactly this list — machine-account creation rights, SPN/UPN uniqueness, LDAP signing and channel binding, NTLM and RC4 policy, SMB signing, anonymous access, DNS dynamic-update ACLs, delegation, krbtgt recovery — as a version-pinned secure configuration profile still REQUIRED before shipping. That is an acknowledgment of the gap, not a model of it. ⇒ No open gap tracks the Windows protocol surface yet. Evidence: `web/admin-ui/src/pages/Samba.tsx:17` | **NOT_BUILT** |
+| TMSA-05 | No FreeIPA-to-Samba reconciliation story | Two directories, and nothing says which wins or how they are kept honest. ⚠️ **Re-measured 2026-09-21 at `857f6f0e`.** The row's "nothing says which wins" is falsified: the design rules (✅ RULED 2026-08-08) that "authority is per object class and per mode", and its four-row table assigns FreeIPA / Samba-AD-always / Customer AD / Existing AD per object class. A later section rules equivalence unobservable and reportable as `unknown`. What remains: the reconciler PLANS and does not act — `reconcile/observed.go:4-8`, "⛔ THIS PACKAGE PLANS, IT DOES NOT ACT". ⚠️ Citation range corrected before landing: the quoted sentence about a single authority spans `:441-443`, not the `:440-442` first cited. Evidence: `src/api-gateway/internal/sambaplan/reconcile/observed.go:4` | **PARTIAL** |
+| TMSA-06 | Placement is a security decision with no security write-up | Where the DC sits decides what is reachable, and the HA compose already binds directory ports widely. ⚠️ **Re-measured 2026-09-21 at `857f6f0e`.** A plan with an unset firewall ruleset is mechanically blocked — but ⚠️ NOT on the citations an earlier measurement gave, and the difference matters. `BlockFirewallRulesetUnset` is raised in real code at `reconcile.go:317-322`. The two cited "call sites" in `sambaplan/handler.go` are both COMMENT lines, and the code around `:700-704` does the opposite of honouring it — on an empty ruleset digest it logs `sambaplan.observation.ruleset_refused` and CONTINUES. The blocker is actually enforced at `reconcile.go:744` (`if len(plan.Blockers) != 0 // len(plan.Refusals) != 0`) with the steps zeroed in `plan.go:215/236/258`. ⇒ The claim survives on evidence the row had not cited. Evidence: `src/api-gateway/internal/sambaplan/reconcile/reconcile.go:317` · `src/api-gateway/internal/sambaplan/reconcile/reconcile.go:744` · `src/api-gateway/internal/sambaplan/plan.go:215` | **PARTIAL** |
 
 ## Where this came from
 

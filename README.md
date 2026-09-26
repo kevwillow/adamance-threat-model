@@ -24,19 +24,23 @@ are published anyway. When the source opens, every one of them can be checked.
 
 | Document | Edited | Covers |
 | --- | --- | --- |
-| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-05-24 to 2026-09-05 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
-| [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 to 2026-09-05 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
-| [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 to 2026-09-05 | The installer and the supply chain behind it, including the part nobody can engineer away. |
-| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 to 2026-09-05 | The audit chain and the copy that leaves the box. |
-| [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | 2026-09-01 to 2026-09-05 | Recording privileged sessions, and the one deliberate exception. |
-| [THREAT_MODEL_samba_ad_dc.md](THREAT_MODEL_samba_ad_dc.md) | 2026-09-01 | The optional module that makes adamance the domain itself. |
-| [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 to 2026-09-04 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
-| [THREAT_MODEL_ad_integration.md](THREAT_MODEL_ad_integration.md) | 2026-09-01 | Keeping the Active Directory you already run. |
+| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-05-24 to 2026-09-24 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
+| [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 to 2026-09-23 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
+| [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 to 2026-09-23 | The installer and the supply chain behind it, including the part nobody can engineer away. |
+| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 to 2026-09-23 | The audit chain and the copy that leaves the box. |
+| [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | 2026-09-01 to 2026-09-23 | Recording privileged sessions, and the one deliberate exception. |
+| [THREAT_MODEL_samba_ad_dc.md](THREAT_MODEL_samba_ad_dc.md) | 2026-09-01 to 2026-09-23 | The optional module that makes adamance the domain itself. |
+| [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 to 2026-09-23 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
+| [THREAT_MODEL_ad_integration.md](THREAT_MODEL_ad_integration.md) | 2026-09-01 to 2026-09-18 | Keeping the Active Directory you already run. |
 
 The control plane model has been in revision since May 2026 and its header lists every review date.
 The seven subsystem models were added on 2026-09-01. Four of them, and the control plane model, were
 corrected and extended on 2026-09-04, and five were corrected again on 2026-09-05. Each file repeats
 its own dates in its header.
+
+On 2026-09-26 all eight were brought level with the copies kept beside the source, which went on
+being re-measured against the code through 2026-09-24. The rows this repository corrected on its own on
+2026-09-05 were kept.
 
 ## Read the corrections first
 
@@ -144,7 +148,8 @@ Two of the reviewers' findings could not be settled by reading the documents, so
 against the source, and both were worse than reported. The control that claimed to make a
 silently-dropping destination visible reads a *local* record and cannot see the destination at all,
 and it was carried as **BUILT**. And the store that records anchors discards a conflicting one
-silently, which is the exact evidence a restore-versus-attack check needs.
+silently, which is the exact evidence a restore-versus-attack check needs. That one has since been fixed:
+since 2026-09-23 a conflicting anchor is refused and recorded.
 
 The reviewers also disagreed with the outside read in one place and were right to: a row stating a
 requirement was read as a claim that the requirement was met. That row now says so, because
