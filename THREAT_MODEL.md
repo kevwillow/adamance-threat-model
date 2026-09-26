@@ -16,7 +16,7 @@
 
 ## How to read this document
 
-**This document is the contract, not a status report.** ⚖️ **OPERATOR RULED, 2026-09-04, after models repeatedly narrowed rows here and on the website to match what was built:** *"if its technically possible IT STAYS IN THE DOCS. remember, the docs and threat model are the contract that the code has to meet... and is not a statement of the codes current status."* A row states a threat and the control the code
+**This document is the contract, not a status report.** ⚖️ **OPERATOR RULED, 2026-09-04, after models repeatedly narrowed rows here and on the website to match what was built:** if a threat is technically possible, it stays in the documents, because the documents and this threat model are the contract the code has to meet, not a statement of its current status. A row states a threat and the control the code
 has to meet. The status beside it says how far the code has got. A threat is never removed because
 nothing implements it yet; it is removed only when it stops being technically possible, which is rare.
 A row with no code behind it is a requirement, not a claim, and nobody should cite it as a protection.
