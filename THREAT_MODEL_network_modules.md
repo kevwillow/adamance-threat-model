@@ -1,8 +1,9 @@
 # Threat Model: the network modules, VPN, RADIUS and DNS
 
 > Status: **DRAFT, written 2026-09-01** against `b276339c`, extended 2026-09-04. Owner: project maintainer.
+> External review: **2026-09-26.** Read in full by three reviewers; each finding that survived checking is added or corrected in place and dated 2026-09-26, and every corrected sentence quotes what it replaced. Not a whole-document re-measure.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md). These three are optional modules, and the
-> main threat model does not mention any of them.
+> main threat model refers to them only in two cross-cutting rows (revocation convergence and credentialed egress) and models none of them. ⚠️ Corrected 2026-09-26: this read "the main threat model does not mention any of them", which stopped being true on 2026-09-04.
 >
 > ⚠️ **Build status up front.** RADIUS has real code and the most interesting security work in this
 > document. DNS filtering has a built control-plane half and **no resolver process at all**, so an
@@ -56,6 +57,7 @@ read is only correct while writes are the only way rows appear.
 | TMNV-04 | Offline attack on the RADIUS authenticator | Not modelled. This is the well-known weakness of the older protocol modes and it depends on which EAP methods are permitted, which nothing records. | **NOT MODELLED** |
 | TMNV-05 | A device is deleted in the console but keeps authenticating | Convergence and heartbeat handlers exist so drift is at least observable (`src/api-gateway/internal/handlers/radius/heartbeat.go`). Whether removal is enforced promptly is undescribed. | **PARTIAL** |
 | TMNV-06 | Client config shipped to the wrong host | ⚠️ Unlike the directory bind credential in `adsecrets`, a RADIUS secret is deliberately **not** bound to one destination endpoint, because a RADIUS client legitimately has more than one. That is a reasoned decision, and it does mean the binding control that exists elsewhere is absent here. | **ACCEPTED, by design** |
+| TMNV-15 | An enrolled host that is not a RADIUS server pulls the rendered `clients.conf`, which carries every shared secret | ⭐ Added 2026-09-26 (external review). The route is authorised against the object, not only the certificate: only a host registered as an enabled RADIUS server receives the file, any other enrolled host is refused, and the refusal is audited with the caller's name. Measured at `27679898d`: the handler looks the calling certificate's FQDN up among enabled RADIUS servers before rendering anything (`src/api-gateway/internal/handlers/radius/clientsconfig.go:207`, `LookupEnabled`), and the policy rule says in its own comment that it is not the boundary (`policies/api/authz.rego:132-137`), and both refusal paths emit an audit event naming the calling host (`emitRefusal` at `:530`, called at `:216` and `:222`). | **BUILT** |
 
 ## DNS
 
@@ -73,11 +75,11 @@ process anywhere in the product.
 
 | ID | Vector | Control | Status |
 | --- | --- | --- | --- |
-| TMNV-07 | A device ignores the resolver and asks 8.8.8.8 | none. Filtering by resolver is advisory unless something forces traffic through it, and nothing describes that enforcement. | **NOT MODELLED** |
-| TMNV-08 | DNS over HTTPS or TLS bypasses the sinkhole entirely | none, and this is the one that decides whether the feature means anything. A modern browser can be talking to its own resolver over 443 without asking the system at all. | **NOT MODELLED** |
+| TMNV-07 | A device ignores the resolver and asks 8.8.8.8 | none. Filtering by resolver is advisory unless something forces traffic through it, and nothing describes that enforcement. ⭐ Required control, added 2026-09-26 (external review): on a managed host the agent's firewall ruleset redirects outbound DNS on port 53 to the adamance resolver and drops port 53 to anything else. For an unmanaged device the console states whether enforcement happens at the network (the operator's router redirects) or is advisory, and never shows an advisory device as filtered. Status read **NOT MODELLED** until 2026-09-26; there is no resolver yet (TMN-01). | **NOT_BUILT** |
+| TMNV-08 | DNS over HTTPS or TLS bypasses the sinkhole entirely | none, and this is the one that decides whether the feature means anything. A modern browser can be talking to its own resolver over 443 without asking the system at all. ⭐ Required control, added 2026-09-26 (external review): on a managed host the same ruleset blocks outbound 853 and the published DNS-over-HTTPS resolver addresses, and the resolver answers the canary domains browsers check before enabling DNS-over-HTTPS, so cooperating clients switch it off. Terminating DNS-over-HTTPS or DNS-over-TLS is a non-goal of the DNS design, and the console says so. Status read **NOT MODELLED** until 2026-09-26; there is no resolver yet (TMN-01). | **NOT_BUILT** |
 | TMNV-09 | A blocklist source is compromised and blocks or redirects something it should not | The catalogue is described as the reviewed set of sources adamance is willing to fetch, which is the right shape. It is empty, so the property is untested. | **DESIGNED** |
 | TMNV-10 | Sinkhole answers are themselves a channel | Not modelled. A sinkhole returns an answer, and what it returns is a decision. | **NOT MODELLED** |
-| TMNV-11 | Kids accounts are bypassed by changing a device's resolver | Not modelled, and on a device the child controls this is the obvious first move. | **NOT MODELLED** |
+| TMNV-11 | Kids accounts are bypassed by changing a device's resolver | Not modelled, and on a device the child controls this is the obvious first move. ⭐ Required control, added 2026-09-26 (external review): a Kids account's devices are enforced only where TMNV-07 holds. A device that cannot be enforced is labelled advisory beside the account, and the account is never shown as protected while any of its devices is advisory. Status read **NOT MODELLED** until 2026-09-26; there is no resolver yet (TMN-01). | **NOT_BUILT** |
 
 ## VPN
 

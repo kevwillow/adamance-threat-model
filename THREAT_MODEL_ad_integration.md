@@ -1,6 +1,7 @@
 # Threat Model: Active Directory integration
 
 > Status: **DRAFT, written 2026-09-01** against `b276339c`. Owner: project maintainer.
+> External review: **2026-09-26.** Read in full by three reviewers; each finding that survived checking is added or corrected in place and dated 2026-09-26, and every corrected sentence quotes what it replaced. Not a whole-document re-measure.
 > Companion to [`THREAT_MODEL.md`](THREAT_MODEL.md), which has no Active Directory boundary in
 > it. This is about keeping the directory you already run, not about
 > [`THREAT_MODEL_samba_ad_dc.md`](THREAT_MODEL_samba_ad_dc.md), where adamance becomes the
@@ -93,17 +94,18 @@ have granted themselves something over here.
 | TMADV-03 | Delete then re-create the source to dodge that | Anticipated. Re-enrolment is required and it names the destination. | **BUILT** |
 | TMADV-04 | A path that predates the validator sits in the database | Re-validated at read, not trusted from the row. | **BUILT** |
 | TMADV-05 | The federated broker is given write access to the customer directory | Read-only federation is a decision rather than a default nobody touched, and adamance owns the credential lifecycle so a password change takes one audited path. | **PARTIAL** |
-| TMADV-06 | A group grants privilege here because AD said so | Nothing. See the trust-boundary note. No constraint on which AD groups may map to privileged roles, and no confirmation that group resolution is fresh. | **NOT MODELLED** |
-| TMADV-07 | A disabled or deleted AD account keeps working here | Nothing. Revocation lag between the two directories is undescribed. | **NOT MODELLED** |
-| TMADV-08 | LDAPS transport is downgraded or the AD certificate is not pinned | Partly covered by the main threat model's IPA CA pinning pattern, but nothing states the equivalent requirement for a customer directory. | **NOT MODELLED** |
-| TMADV-09 | AD is unavailable and authentication has to decide what to do | Nothing written. Fail-closed is the product's stated posture and this path has no documented behaviour. | **NOT MODELLED** |
-| TMADV-10 | A trust relationship in the customer forest brings in principals nobody expected | Nothing. Foreign principals arriving through an existing AD trust are outside anything described here. | **NOT MODELLED** |
+| TMADV-06 | A group grants privilege here because AD said so | Nothing. See the trust-boundary note. No constraint on which AD groups may map to privileged roles, and no confirmation that group resolution is fresh. ⭐ Required control, added 2026-09-26 (external review): an AD group confers a privileged role here only through an explicit, dual-controlled mapping keyed on the group's stable identifier (its objectSID), never its name. The mapping is a closed allowlist, an unmapped group confers nothing, membership is resolved at decision time or cached no longer than the bound in the revocation-convergence table, and the resolution is recorded on the decision. Status read **NOT MODELLED** until 2026-09-26; the new status follows the matching Still-open row. | **NOT_BUILT** |
+| TMADV-07 | A disabled or deleted AD account keeps working here | Nothing. Revocation lag between the two directories is undescribed. ⭐ Required control, added 2026-09-26 (external review): a disable, delete or lockout in AD takes effect here within the maximum the revocation-convergence table states for AD-federated accounts, and a federated account that cannot be re-resolved fails closed. The number is owed on that table. Status read **NOT MODELLED** until 2026-09-26; the new status follows the matching Still-open row. | **NOT_BUILT** |
+| TMADV-08 | LDAPS transport is downgraded or the AD certificate is not pinned | Partly covered by the main threat model's IPA CA pinning pattern, but nothing states the equivalent requirement for a customer directory. ⭐ Required control, added 2026-09-26 (external review): LDAPS only; the customer directory's CA or leaf certificate is pinned when the bind credential is enrolled and re-validated on every connection with the server name set. A directory that cannot offer TLS 1.3 is recorded as an exemption on the identity source and shown on the compliance surface. Status read **NOT MODELLED** until 2026-09-26; the new status follows the matching Still-open row. | **PARTIAL** |
+| TMADV-09 | AD is unavailable and authentication has to decide what to do | Nothing written. Fail-closed is the product's stated posture and this path has no documented behaviour. ⭐ Required control, added 2026-09-26 (external review): runtime sign-in fails closed while AD is unreachable. No cached credential grants access, the outage is a reported degraded state, and the local break-glass path is the only way in. Status read **NOT MODELLED** until 2026-09-26; not yet measured. | **NOT MEASURED** |
+| TMADV-10 | A trust relationship in the customer forest brings in principals nobody expected | Nothing. Foreign principals arriving through an existing AD trust are outside anything described here. ⭐ Required control, added 2026-09-26 (external review): a principal from a forest or domain other than the one the identity source names is refused and treated as an unmapped subject; cross-forest trusts are out of v1 (TMAD-05). Status read **NOT MODELLED** until 2026-09-26; not yet measured. | **NOT MEASURED** |
 
 ## What we do not defend against
 
 - A compromised Active Directory. It is upstream of us, we federate to it read-only, and if it lies
   about who someone is then we will believe it. The mitigation is that we do not write to it and we
   keep our own record of what happened here.
+  ⭐ Clarified 2026-09-26 (external review), because A14 above is designed against: this non-goal covers AD lying about **who** someone is. AD deciding **what** they may do here is defended: privilege is conferred only through the allowlisted mapping in TMADV-06, so a group added over there grants nothing here unless an adamance operator mapped it.
 - The customer's own AD hygiene. Group sprawl, stale accounts and over-broad delegation are theirs.
 - Anything in the forest beyond the directory we were pointed at.
 

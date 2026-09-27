@@ -24,14 +24,14 @@ are published anyway. When the source opens, every one of them can be checked.
 
 | Document | Edited | Covers |
 | --- | --- | --- |
-| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-05-24 to 2026-09-24 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
-| [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 to 2026-09-23 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
-| [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 to 2026-09-23 | The installer and the supply chain behind it, including the part nobody can engineer away. |
-| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 to 2026-09-23 | The audit chain and the copy that leaves the box. |
-| [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | 2026-09-01 to 2026-09-23 | Recording privileged sessions, and the one deliberate exception. |
-| [THREAT_MODEL_samba_ad_dc.md](THREAT_MODEL_samba_ad_dc.md) | 2026-09-01 to 2026-09-23 | The optional module that makes adamance the domain itself. |
-| [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 to 2026-09-23 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
-| [THREAT_MODEL_ad_integration.md](THREAT_MODEL_ad_integration.md) | 2026-09-01 to 2026-09-18 | Keeping the Active Directory you already run. |
+| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-05-24 to 2026-09-26 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
+| [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 to 2026-09-26 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
+| [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 to 2026-09-26 | The installer and the supply chain behind it, including the part nobody can engineer away. |
+| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 to 2026-09-26 | The audit chain and the copy that leaves the box. |
+| [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | 2026-09-01 to 2026-09-26 | Recording privileged sessions, and the one deliberate exception. |
+| [THREAT_MODEL_samba_ad_dc.md](THREAT_MODEL_samba_ad_dc.md) | 2026-09-01 to 2026-09-26 | The optional module that makes adamance the domain itself. |
+| [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 to 2026-09-26 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
+| [THREAT_MODEL_ad_integration.md](THREAT_MODEL_ad_integration.md) | 2026-09-01 to 2026-09-26 | Keeping the Active Directory you already run. |
 
 The control plane model has been in revision since May 2026 and its header lists every review date.
 The seven subsystem models were added on 2026-09-01. Four of them, and the control plane model, were
@@ -41,6 +41,9 @@ its own dates in its header.
 On 2026-09-26 all eight were brought level with the copies kept beside the source, which went on
 being re-measured against the code through 2026-09-24. The rows this repository corrected on its own on
 2026-09-05 were kept.
+Later the same day an outside review of all eight added seventeen rows and corrected, in place, every
+contradiction it found that survived checking. What it found, and what was refused, is under
+[What is not claimed](#what-is-not-claimed).
 
 ## Read the corrections first
 
@@ -99,7 +102,8 @@ The commit history here runs from the first draft in May 2026 and has not been s
 to know when a claim appeared, when it was contradicted, and what it said before it was corrected,
 `git log -p` on any of these files will tell you. Contributor email addresses were collapsed onto one
 address before publication. Author names are untouched, so a change still names whoever drafted it.
-Nothing else in the history was edited.
+Nothing else in the history was edited, apart from one commit subject reworded on 2026-09-26, the day
+it was pushed; no file changed in that commit.
 
 ## How the contract gets checked
 
@@ -154,6 +158,24 @@ since 2026-09-23 a conflicting anchor is refused and recorded.
 The reviewers also disagreed with the outside read in one place and were right to: a row stating a
 requirement was read as a claim that the requirement was met. That row now says so, because
 mistaking this document's contract rows for status rows is the most likely way to get it wrong.
+
+⭐ **2026-09-26.** Three more reviewers read all eight models end to end, each given a different job:
+Perplexity read them as a design-assurance artefact, OpenAI's gpt-6-astra was asked for threats no row
+covers, and Anthropic's Fable 5.1 was asked whether the eight hold together as one contract. Between
+them they added seventeen rows (first-install authority, which tokens each service may accept, host
+authentication for SSH, secrets leaking into logs, and more) and found rows that contradicted each other
+or the documents' own reading rule. Every status change they proposed was measured against the source
+before it landed. One finding did not survive that: a reviewer concluded that an AI agent would clear
+every step-up check once an operator switched off the MFA requirement, and the policy refuses a subject
+that is not a human user before that switch is ever read. Some things the reviewers read as gaps were
+already built, in whole or in part, and those rows now say so with the file and line.
+
+Several recommendations were refused on principle: narrowing the MFA, non-repudiation, agent-account,
+Samba, DNS and ARM64 claims until the code catches up. These documents are the contract, so a claim that
+can be built stays. One requirement was changed because it could never be met: a server cannot see
+whether a TLS client checked its certificate, so the row that asked the gateway to refuse an unverified
+bootstrap now asks for the achievable, stronger thing. The corrections quote what they replaced, and the
+new rows are marked NOT MEASURED until someone measures them.
 
 ⛔ **What this still is not.** Nobody has audited the code. Five models reading nine markdown files
 is not an audit, no matter how many of them agree, and where a finding rests on source that only the
