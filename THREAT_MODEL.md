@@ -39,6 +39,16 @@ tree. All six are corrected in place below and each one quotes what it used to s
 next heading is a finding aid for those corrections. It is not an instruction about which half of this
 document to believe, and it stops being needed once every row it lists carries its own correction.
 
+⛔ **And the corrections were themselves re-measured against the tree before they landed, because
+seven of them were wrong.** The outside reader had the published documents and no source access, so
+several new rows asserted a control was missing when it is built: the SSH KRL path, PKCE, `state`,
+`nonce`, the CSP, CSR proof-of-possession, the SAN match, and session retention. Every one of those
+rows now states what was measured and carries the command's answer, and the half that is genuinely
+open is what the row is now about. The same treatment went the other way for the anchor signing key,
+where measurement made the finding **worse** than the reader could see. A row that arrives from
+outside is a lead, not a finding, and this paragraph exists so nobody reads the 2026-09-04 additions
+as having been verified merely by being written down. ⚠️ Brought into the published copy 2026-09-27; the maintained copy has carried it since 2026-09-04.
+
 ⭐ **Corrections are the most valuable thing in here.** Where a row once said a control was confirmed
 and that turned out to be false, the row says that too, because a gap nobody has looked at is ordinary
 and a gap with a tick next to it sends every later reader somewhere else.
@@ -50,7 +60,7 @@ table is the index of them.**
 
 | TM | Contested claim (old narrative) | Live ground truth (2026-07-11) |
 |----|----|----|
-| TM-10 | "enrollment handler is a stub, never calls FreeIPA" | FALSE; `enrollment/handler.go` calls `HostAdd`/`GetKeytab`/`IssueHostCert` (:514/533/547); join redeem does the same. Fully wired. |
+| TM-10 | "enrollment handler is a stub, never calls FreeIPA" | FALSE; `enrollment/handler.go` calls `HostAdd`/`GetKeytab`/`IssueHostCert` (:514/533/547); join redeem does the same. Fully wired. ⚠️ Re-measured 2026-09-27 at `36078a007`: the three calls are now in `src/api-gateway/internal/enrollment/handler.go` at :788, :807 and :821, so the line numbers in this row are out of date. |
 | TM-23 | "❌ VIOLATION: 7 internal clients on TLS 1.2" | api-gateway + wazuh-bridge are TLS 1.3-only (31 `MinVersion: VersionTLS13`, zero `VersionTLS12` in `src/api-gateway`/`src/wazuh-bridge`). **BUT the client-agent join bootstrap still used TLS 1.2 → FIXED this pass (see below).** |
 | TM-19 | "second-approver NOT implemented; policies/governance doesn't exist" | Built: `policies/governance/require_approval.rego` + `internal/storage/approval/store.go` + dual-control (opt-in, fail-secure). |
 | TM-16 | "bundle.critical never produced; CriticalBundlePath not plumbed" | `scripts/build-policies.sh` has a `critical` target; `bundle.go` fully plumbs `CriticalBundlePath` (default + served + `CriticalMaxAge`). |
@@ -62,8 +72,12 @@ table is the index of them.**
 - **TM-23 residual (crypto baseline):** `src/client-agent/internal/enroll/join.go` set `MinVersion:
   tls.VersionTLS12` on all three join-bootstrap TLS configs (CA-file, fingerprint-pin, `--insecure`),
   below the TLS 1.3 baseline the rest of the stack enforces. **Fixed → `tls.VersionTLS13`** (the gateway
-  edge is TLS 1.3-capable; the other agent paths already used 1.3). The table's "no remaining
-  `VersionTLS12` in `src/`" claim is now actually true.
+  edge is TLS 1.3-capable; the other agent paths already used 1.3). ⚠️ **Corrected 2026-09-05. This continued
+  "The table's 'no remaining `VersionTLS12` in `src/`' claim is now actually true", and it was not
+  true then and is not true now** — the 2026-09-04 re-measure in the TM-23 detail below counted five
+  such tokens on the same tree, and the 2026-09-05 re-measure counted fifteen. Two statements in one
+  document disagreeing about the same grep is the exact failure this file's reading rules exist to
+  prevent. ⚠️ Brought into the published copy 2026-09-27; the maintained copy has carried it since 2026-09-05.
 - **Account lockout / credential stuffing (was "❓ NOT FOUND"):** the Keycloak realm had **no
   brute-force protection**. **Fixed**; the production realm template
   (`deploy/setup/keycloak/realm-adamance.json.tmpl`) now sets `bruteForceProtected:true`,
@@ -358,6 +372,7 @@ it held is still in the authoritative table verbatim.
 | 2026-09-27 | The maintained copy took this copy's own 2026-09-04 and 2026-09-05 corrections, and this copy took the measured 2026-09-04 versions of four rows it had missed: the browser-facing OIDC flow, console rendering, SSH certificate revocation and approval binding. The 2026-09-26 header line moved below the 2026-09-05 correction it had split. | project maintainer |
 | 2026-09-27 | One row only. Added TM-43, operator-refuted: any authenticated user may ask for a JIT super_admin grant; only a standing super-admin may approve one. The maintainer's reasoning for the ruling was added to the row the same day. | - |
 | 2026-09-27 | One row only. Asset 10, the OpenBao unseal shares: split custody off the host is what setup pushes the operator to, and a one-machine custody stays allowed and called out. The row records the decision and what the installer did that day. | - |
+| 2026-09-27 | This copy took the maintained copy's re-measurements it had missed. Three of them correct statements this copy still printed as true: the TLS 1.2 count on TMS-24 (the replacement said zero; it was five, then fifteen, and the guard it cited walked neither module), the TMS-04 compose file (deleted from the tree on 2026-08-08), and the line saying the TLS 1.2 table was "now actually true". Also added: the 2026-09-04 note that the corrections were themselves re-measured, the audit-copy attribution prohibition, and the 2026-09-21 and 2026-09-23 re-measures of TMA2-03 and TMA2-14. Each block says when it arrived here, and each replaced sentence is quoted. TM-10's citation was re-measured in both copies. | - |
 
 ---
 
@@ -509,10 +524,14 @@ documented monthly patch cadence.
   (`package/adamance/docker-compose.yml`) still contains non-digest images
   (`freeipa/freeipa-server:rocky-9-4`, `openpolicyagent/opa:latest`, `wazuh/*:4.8.0`) that must be
   resolved and pinned before production use", and the Finding line directly below it already said the
-  opposite.** All five images in `package/adamance/docker-compose.yml` are `@sha256:`-pinned as of
-  2026-07-11. A digest pin is not provenance: it says the bytes did not change, not that the bytes came
-  from the build anyone believes they came from. Signed provenance for the images and for the release
-  artifacts is a separate requirement and is not met.
+  opposite.** ⛔ **And the replacement is wrong too, so this row states what was measured instead.**
+  All five images in that file WERE `@sha256:`-pinned by 2026-07-11 — and the file itself was deleted
+  from the tree on 2026-08-08 by `82a6c575`, which removed the orphaned `package/` prototype whole. So
+  the single-host package compose named in the paragraph above and in `release.yml`'s `digest-check`
+  job is not in this repository at all, and the job's own guard prints `SKIP (not found)` and
+  continues, which is why nobody noticed. A digest pin is also not provenance: it says the bytes did
+  not change, not that the bytes came from the build anyone believes they came from. Signed provenance
+  for the images and for the release artifacts is a separate requirement and is not met. ⚠️ Reconciled 2026-09-27: this copy's replacement read "All five images in `package/adamance/docker-compose.yml` are `@sha256:`-pinned as of 2026-07-11." The maintained copy has carried the measured version since 2026-09-04.
 - Trivy scan in CI: `release.yml` includes Trivy scanning of container images with blocking
   severity threshold (HIGH/CRITICAL).
 - Monthly patch cadence: documented in the release process and the design docs.
@@ -1028,11 +1047,49 @@ minimum version setting was not confirmed in this pass.
 
 #### TMS-24 Internal service clients use TLS 1.2
 **As-built:** ✅ RESOLVED (2026-07-11). ⚠️ **Corrected 2026-09-04: this read "❌ VIOLATION" and stayed
-that way after the violation was fixed.** There is no remaining `tls.VersionTLS12` in
-`src/api-gateway` or `src/wazuh-bridge` (31 `MinVersion: VersionTLS13`, zero `VersionTLS12`), and the
-last residual, the three client-agent join-bootstrap configs in
+that way after the violation was fixed.** ⚠️ **Re-measured 2026-09-04 and the replacement's own
+numbers were wrong, so these are the counted ones:** 26 `MinVersion: ... VersionTLS13` across
+`src/api-gateway` and `src/wazuh-bridge`, and five `VersionTLS12` tokens rather than zero. Three of
+the five are a version-to-string mapping and its tests; one is a test server. The fifth is real
+egress — `src/api-gateway/internal/notifier/notifier.go:153` pins TLS 1.2 on outbound SMTP STARTTLS —
+and it is a **reviewed exemption, not a residual**, recorded with its reason and a required floor in
+`src/api-gateway/internal/handlers/compliance/tls13_invariant_test.go`. The last residual known at
+that time, the three client-agent join-bootstrap configs in
 `src/client-agent/internal/enroll/join.go`, was raised to `tls.VersionTLS13` on 2026-07-11. The
-original finding follows unaltered, because the file list is what made it findable.
+original finding follows unaltered, because the file list is what made it findable. ⚠️ Reconciled 2026-09-27: this copy's replacement read "There is no remaining `tls.VersionTLS12` in `src/api-gateway` or `src/wazuh-bridge` (31 `MinVersion: VersionTLS13`, zero `VersionTLS12`)"; the maintained copy re-measured it on 2026-09-04, and the 2026-09-05 correction below reaches this copy on 2026-09-27.
+
+🚨 **Corrected 2026-09-05, and the correction is about this row's guard rather than its numbers.**
+The paragraph above called that file "the guard that walks both modules", and named
+`src/wazuh-bridge` as one of the two. **It walked neither.** Its root list was `api-gateway` and
+`common` — measured — so `src/client-agent`, `src/wazuh-bridge` and `src/lac` were outside the walk
+entirely, and a TLS 1.2 pin in any of them was invisible to the guard this row cites as enforcement.
+⇒ **A guard cannot be cited for a module it cannot see**, and this document said it could.
+
+**What accumulated in the blind spot, measured 2026-09-05:** the count was no longer five but
+**fifteen** `VersionTLS12` tokens across `src/`, of which **five are non-test**. Two are the ones
+this row already accounts for (the SMTP egress exemption, and a version-to-string `case` arm in
+`src/api-gateway/internal/server/endpoints.go`). The other three were unaccounted residuals, all
+outbound clients to a gateway edge that is **TLS 1.3 ONLY** — `mtls.BuildServerConfig` pins
+`MinVersion` *and* `MaxVersion` to `VersionTLS13` (`src/common/mtls/tlsconfig.go:34-35,47-48`):
+
+| Site | What it carries | Note |
+|---|---|---|
+| `src/client-agent/internal/diagnose/net.go` | the host's client certificate | |
+| `src/client-agent/internal/prove/checks/certrevocation.go` | a bearer admin token or a client certificate | |
+| `src/client-agent/internal/prove/checks/siemdelivery.go` | an operator admin credential | carried `//nolint:gosec // gateway supports TLS 1.2+`, which was **never true of this gateway** |
+
+🪤 **Two of the three are in `adamance-prove` itself** — the tool whose whole purpose is to prove
+this contract holds — and both landed on 2026-09-04, *the same day* the "five tokens"
+accounting above was measured. The count was correct when written and the tree moved under it
+within the day. That is the argument for a guard rather than a re-count.
+
+**Fixed 2026-09-05:** all three raised to `tls.VersionTLS13`; the guard's roots widened to
+`client-agent`, `wazuh-bridge` and `lac` (43 `tls.Config` literals across 5 roots, up from 21 across
+2); and a new `TestTLS13GuardReachesEveryRoot` fails any root that contributes zero literals, because
+a root path that resolves to a directory with no Go source walks clean and proves nothing.
+⭐ **That last check earns its place: a root pointed at a source-free directory is invisible to
+`TestTLS13InvariantHolds`, which still printed `ok` under exactly that defect.** All three planted
+defects were caught, each with a green→red→green transition.
 
 The api-gateway server correctly enforces TLS 1.3 via `src/common/mtls/tlsconfig.go` (TM-21). However, multiple internal service-to-service clients still use `tls.VersionTLS12`:
 

@@ -24,13 +24,13 @@ are published anyway. When the source opens, every one of them can be checked.
 
 | Document | Edited | Covers |
 | --- | --- | --- |
-| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-05-24 to 2026-09-26 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
-| [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 to 2026-09-26 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
-| [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 to 2026-09-26 | The installer and the supply chain behind it, including the part nobody can engineer away. |
-| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 to 2026-09-26 | The audit chain and the copy that leaves the box. |
-| [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | 2026-09-01 to 2026-09-26 | Recording privileged sessions, and the one deliberate exception. |
+| [THREAT_MODEL.md](THREAT_MODEL.md) | 2026-05-24 to 2026-09-27 | The control plane. Identity, enrollment, policy distribution, lateral movement, and the operators themselves. |
+| [THREAT_MODEL_agent_accounts.md](THREAT_MODEL_agent_accounts.md) | 2026-09-01 to 2026-09-27 | Accounts held by AI agents. Written assuming the agent can be talked into anything. |
+| [THREAT_MODEL_installer.md](THREAT_MODEL_installer.md) | 2026-09-01 to 2026-09-27 | The installer and the supply chain behind it, including the part nobody can engineer away. |
+| [THREAT_MODEL_audit_anchoring.md](THREAT_MODEL_audit_anchoring.md) | 2026-09-01 to 2026-09-27 | The audit chain and the copy that leaves the box. |
+| [THREAT_MODEL_session_recording.md](THREAT_MODEL_session_recording.md) | 2026-09-01 to 2026-09-27 | Recording privileged sessions, and the one deliberate exception. |
 | [THREAT_MODEL_samba_ad_dc.md](THREAT_MODEL_samba_ad_dc.md) | 2026-09-01 to 2026-09-26 | The optional module that makes adamance the domain itself. |
-| [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 to 2026-09-26 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
+| [THREAT_MODEL_network_modules.md](THREAT_MODEL_network_modules.md) | 2026-09-01 to 2026-09-27 | VPN, RADIUS and DNS. The modules that authenticate things adamance does not manage. |
 | [THREAT_MODEL_ad_integration.md](THREAT_MODEL_ad_integration.md) | 2026-09-01 to 2026-09-26 | Keeping the Active Directory you already run. |
 
 The control plane model has been in revision since May 2026 and its header lists every review date.
@@ -44,6 +44,9 @@ being re-measured against the code through 2026-09-24. The rows this repository 
 Later the same day an outside review of all eight added seventeen rows and corrected, in place, every
 contradiction it found that survived checking. What it found, and what was refused, is under
 [What is not claimed](#what-is-not-claimed).
+
+On 2026-09-27 the two copies were reconciled in both directions. This copy took the maintained copy's re-measurements it had missed, three of which correct statements
+it still printed as true. Each block says when it arrived here, and each replaced sentence is quoted.
 
 ## Read the corrections first
 
