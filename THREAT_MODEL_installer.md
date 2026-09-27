@@ -45,7 +45,7 @@ same web page, which is the failure this document's own rule exists to prevent �
 filed in the register and never propagated to the prose that stated the fault. What the paragraph
 above still establishes is unchanged and is the reason the wording mattered: the script is one of the
 things fetched and it is the one thing not checked. That gap is real, it is unfixable by a signature,
-and TMI-07 carries what would actually close it.
+and TMI-07 carries what would actually close it. ⚠️ Reconciled 2026-09-27: the published and maintained copies had diverged here, and the other version also read "The word doing the damage is "everything", because the script is one of the things fetched and it is the one thing not checked.".
 
 ## Assets
 
